@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function homeDoc(homeId) { return get(/databases/$(database)/documents/homes/$(homeId)); }
+    function isMember(homeId) { return signedIn() && request.auth.uid in homeDoc(homeId).data.memberIds; }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // Profiles: you can edit your own; housemates can read each other.
+    match /users/{userId} {
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (
+        request.auth.uid == userId ||
+        (resource.data.homeId != null && isMember(resource.data.homeId))
+      );
+    }
+
+    // Invite codes map to a home. Readable one at a time (no listing) by any signed-in user.
+    match /invites/{code} {
+      allow get: if signedIn();
+      // Created in the same batch as the home, so check the home as it will be after the write.
+      allow create: if signedIn()
+        && request.auth.uid in getAfter(/databases/$(database)/documents/homes/$(request.resource.data.homeId)).data.memberIds;
+    }
+
+    match /homes/{homeId} {
+      allow read: if isMember(homeId);
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid];
+      // Members can rename etc., but can't rewrite who owns it or swap the invite code.
+      allow update: if isMember(homeId) && onlyChanges(['name', 'memberIds'])
+        // Only removing yourself is allowed through memberIds for existing members.
+        && (request.resource.data.memberIds == resource.data.memberIds
+            || request.resource.data.memberIds.toSet() == resource.data.memberIds.toSet().difference([request.auth.uid].toSet()));
+      // Joining: add only yourself, proving you hold the invite code.
+      allow update: if signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && onlyChanges(['memberIds', 'joinCode'])
+        && request.resource.data.memberIds.toSet() == resource.data.memberIds.toSet().union([request.auth.uid].toSet())
+        && request.resource.data.joinCode == resource.data.inviteCode;
+
+      // Shared household data: any member can read and write.
+      match /{collection}/{docId} {
+        allow read, write: if isMember(homeId)
+          && collection in ['events', 'shopping', 'recipes', 'menu', 'todos'];
+      }
+    }
+  }
+}

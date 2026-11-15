@@ -1,0 +1,13 @@
+{
+  "name": "chazel-home-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project chazel-test \"node --test rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^13.3.0",
+    "firebase-tools": "^15.36.0"
+  }
+}

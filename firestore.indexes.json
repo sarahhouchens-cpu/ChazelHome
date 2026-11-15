@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "shopping",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "checked", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
