@@ -1,5 +1,49 @@
 # HomeIQ
 
+A shared household website: calendar, Groceries / Household / Fun lists, recipes and a weekly menu that fills the grocery list, and to-dos you can assign and repeat. Each person signs in with their own account and everyone in the home sees changes live.
+
+**Website:** https://sarahhouchens-cpu.github.io/ChazelHome/ (live once the steps below are done)
+
+## One-time setup (about 15 minutes, no coding)
+
+### 1. Turn on the website (GitHub Pages)
+1. In this repo on GitHub, open **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Pick the branch **claude/admiring-keller-5l0to4** and the folder **/docs**, then **Save**.
+4. After a minute or two the page shows your site's address.
+
+### 2. Create the Firebase project (logins and shared data, free)
+1. Go to <https://console.firebase.google.com>, sign in with a Google account, and click **Create a project**. Name it `homeiq`. You can turn Google Analytics off.
+2. **Build → Authentication → Get started → Email/Password → Enable → Save.**
+3. Still in Authentication, open **Settings → Authorized domains → Add domain** and add `sarahhouchens-cpu.github.io`.
+4. **Build → Firestore Database → Create database.** Choose a location near you and **Start in production mode**.
+5. In Firestore, open the **Rules** tab, replace everything with the contents of [`firestore.rules`](firestore.rules) from this repo, and click **Publish**.
+6. Click the gear icon → **Project settings**. Under **Your apps**, click the **</>** (Web) icon, name it `HomeIQ`, and click **Register app** (skip Firebase Hosting).
+7. Copy the `firebaseConfig` block it shows (apiKey, authDomain, projectId, …).
+
+### 3. Connect the two
+Paste that `firebaseConfig` into [`docs/config.js`](docs/config.js) (on GitHub: open the file, click the pencil icon, paste the values, **Commit changes**). Or send it to Claude and it will do this for you. These values identify your project; they are meant to be public, and the security rules decide who can see your data.
+
+### 4. Start using it
+1. Open the website, **Create an account**, then **Create home**.
+2. On the **Household** page, tap **Send invite** (or copy the 6-character code) and send it to your partner.
+3. They open the website, create their own account, choose **Join an existing home** and enter the code.
+4. On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app icon.
+
+## Reminders
+When an event's reminder time arrives, the Today page shows a "Coming up" note. For a notification on your phone, open the event and choose **Add to Google Calendar**; the Google Calendar app sends the alert.
+
+## For developers
+- Website source: `webapp/` (React + Firebase, built with Vite). `cd webapp && npm install && npm run build` writes the site into `docs/` (keep `webapp/public/config.js` matching `docs/config.js`, or a rebuild will blank the settings). `npm test` runs the logic tests.
+- `firestore.rules`: who can read and write what. Tested in `rules-tests/` with the Firestore emulator.
+- `web/homeiq.html`: the earlier claude.ai version (https://claude.ai/artifact/18huTwwcpmg1pfu2E6jucg).
+- `src/`, `functions/`, `app.json`: the earlier iPhone app (Expo + Firebase), kept for reference. Its setup notes follow.
+
+---
+
+# Earlier iPhone version (Expo)
+# HomeIQ
+
 **The web version lives at `web/homeiq.html`** and is published as a claude.ai page: https://claude.ai/artifact/18huTwwcpmg1pfu2E6jucg. It needs no setup; sign-in and shared data are handled by claude.ai. Everything below describes the earlier iPhone (Expo + Firebase) version, kept for reference.
 
 A shared household app for two (or more): one calendar, one set of shopping lists, one menu, one to-do list. Each person has their own login; everyone in the same "home" sees and edits the same data in real time.

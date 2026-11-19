@@ -377,7 +377,9 @@ function App() {
     }
   };
 
-  const ctx = { db, data, me, members, memberIds, profiles, person, firstName, write, say, setSheet, canWrite };
+  // Live values are re-applied to an open sheet on every render, so it never shows stale data.
+  const live = { data, members, memberIds, profiles, person, firstName, canWrite };
+  const ctx = { db, me, write, say, setSheet, ...live };
 
   const homeName = (data.settings || []).find((s) => s.id === 'home')?.name || 'Our home';
   const groceriesLeft = (data.shopping || []).filter((s) => !s.checked).length;
@@ -410,7 +412,7 @@ function App() {
       </nav>
     </div></header>
     <main className="wrap">${body}</main>
-    ${sheet}
+    ${sheet && React.cloneElement(sheet, live)}
     ${toast && html`<div className="toast" role="status">${toast}</div>`}`;
 }
 
@@ -780,7 +782,7 @@ function TodoRow(ctx) {
   const toggle = () => {
     if (!t.done && t.recurrence && t.recurrence !== 'none') {
       const next = nextDue(t.dueDate, t.recurrence);
-      return write((db) => db.doc(`todos/${t.id}`).update({ dueDate: next, completedAt: Date.now(), completedBy: me?.id || null }), `Done. Next due ${dueLabel(next).toLowerCase()}`);
+      return write((db) => db.doc(`todos/${t.id}`).update({ dueDate: next, completedAt: Date.now(), completedBy: me?.id || null }), `Done. Next due: ${dueLabel(next)}`);
     }
     return write((db) => db.doc(`todos/${t.id}`).update({ done: !t.done, completedAt: t.done ? null : Date.now(), completedBy: t.done ? null : (me?.id || null) }));
   };
