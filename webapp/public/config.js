@@ -10,5 +10,5 @@ window.HOMEIQ_FIREBASE = {
   appId: "1:39367089415:web:eeb64bb453dbea928bf9a2",
   measurementId: "G-6Q2LNE7385",
   // Web push key: Firebase console → Project settings → Cloud Messaging → Web Push certificates.
-  vapidKey: ""
+  vapidKey: "BPXFWiI25JdAJ8PwvyX7Zf3p_RyIDvpLLFCd1Z1v_x-Eq1Tyep6hCBLrj6HekFqeMoxWeDR058ouV1imabmPELs"
 };
