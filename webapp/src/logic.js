@@ -45,8 +45,51 @@ const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <
 const NTH = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', '-1': 'last' };
 
 /** Which week of its month a date falls in (1-4), and whether it's the last such weekday. */
+/** Which occurrence of its weekday a date is in its month (1-5), and whether it's the last one. */
 export function weekdayPosition(d) {
-  return { nth: Math.min(4, Math.ceil(d.getDate() / 7)), last: d.getDate() + 7 > lastDayOf(d.getFullYear(), d.getMonth()), weekday: d.getDay() };
+  return { nth: Math.ceil(d.getDate() / 7), last: d.getDate() + 7 > lastDayOf(d.getFullYear(), d.getMonth()), weekday: d.getDay() };
+}
+
+/**
+ * The ways a monthly repeat can follow a start date, in plain words:
+ * "the 22nd", "the fourth Sunday", "the last Sunday", "the last day".
+ */
+export function monthlyChoices(startKey) {
+  const d = parseKey(startKey); const pos = weekdayPosition(d);
+  const out = [{ key: 'date', label: `the ${ordinal(d.getDate())}`, patch: { monthMode: 'date', monthDay: d.getDate() } }];
+  if (pos.nth <= 4) out.push({ key: 'nth', label: `the ${NTH[pos.nth]} ${WEEKDAY_LONG[pos.weekday]}`, patch: { monthMode: 'weekday', nth: pos.nth, weekday: pos.weekday } });
+  if (pos.last) out.push({ key: 'lastwd', label: `the last ${WEEKDAY_LONG[pos.weekday]}`, patch: { monthMode: 'weekday', nth: -1, weekday: pos.weekday } });
+  if (d.getDate() === lastDayOf(d.getFullYear(), d.getMonth())) out.push({ key: 'lastday', label: 'the last day', patch: { monthMode: 'date', monthDay: -1 } });
+  return out;
+}
+
+const sameRuleBits = (rule, patch) => Object.entries(patch).every(([k, v]) => rule[k] === v);
+
+/** Which plain choice a monthly rule matches for this start date, or null for a custom rule. */
+export function monthlyChoiceKey(rule, startKey) {
+  if (rule === 'none' || rule.freq !== 'monthly') return null;
+  const mode = rule.monthMode === 'weekday' ? 'weekday' : 'date';
+  const hit = monthlyChoices(startKey).find((c) => c.patch.monthMode === mode && sameRuleBits(rule, c.patch));
+  return hit ? hit.key : null;
+}
+
+/** When the start date changes, move a rule that followed the old date to follow the new one. */
+export function retargetRule(rule, oldKey, newKey) {
+  if (rule === 'none' || !oldKey || !newKey || oldKey === newKey) return rule;
+  const n = parseKey(newKey);
+  if (rule.freq === 'weekly') {
+    const was = parseKey(oldKey).getDay();
+    return rule.weekdays?.length === 1 && rule.weekdays[0] === was ? { ...rule, weekdays: [n.getDay()] } : rule;
+  }
+  if (rule.freq === 'yearly') return { ...rule, month: n.getMonth(), day: n.getDate() };
+  if (rule.freq === 'monthly') {
+    const key = monthlyChoiceKey(rule, oldKey);
+    if (!key) return rule; // a custom choice stays as chosen
+    const choices = monthlyChoices(newKey);
+    const same = choices.find((c) => c.key === key) || choices.find((c) => c.patch.monthMode === (rule.monthMode === 'weekday' ? 'weekday' : 'date')) || choices[0];
+    return { ...rule, ...same.patch };
+  }
+  return rule;
 }
 
 /** A sensible rule of the given kind, anchored on a start date. */
@@ -55,7 +98,7 @@ export function defaultRule(freq, startKey) {
   const d = parseKey(startKey);
   const rule = { freq, interval: 1 };
   if (freq === 'weekly') rule.weekdays = [d.getDay()];
-  if (freq === 'monthly') Object.assign(rule, { monthMode: 'date', monthDay: d.getDate(), nth: weekdayPosition(d).nth, weekday: d.getDay() });
+  if (freq === 'monthly') { const pos = weekdayPosition(d); Object.assign(rule, { monthMode: 'date', monthDay: d.getDate(), nth: pos.nth <= 4 ? pos.nth : -1, weekday: d.getDay() }); }
   if (freq === 'yearly') Object.assign(rule, { month: d.getMonth(), day: d.getDate() });
   return rule;
 }

@@ -118,3 +118,31 @@ test('yearly from a start date', () => {
   assert.equal(firstDue('2027-03-15', r), '2027-03-15');
   assert.equal(describeRule(r), 'Yearly on Mar 15');
 });
+
+import { monthlyChoices, monthlyChoiceKey, retargetRule, defaultRule } from '../src/logic.js';
+
+test('monthly choices from a Sunday start date', () => {
+  // Sun Nov 22, 2026 is the 22nd and the fourth Sunday (Nov 1 is a Sunday).
+  assert.deepEqual(monthlyChoices('2026-11-22').map((c) => c.label), ['the 22nd', 'the fourth Sunday']);
+  // Sun Nov 15 is the third Sunday.
+  assert.deepEqual(monthlyChoices('2026-11-15').map((c) => c.label), ['the 15th', 'the third Sunday']);
+  // Mon Nov 30 is the 5th Monday: only "last Monday" and "last day" make sense besides the date.
+  assert.deepEqual(monthlyChoices('2026-11-30').map((c) => c.label), ['the 30th', 'the last Monday', 'the last day']);
+});
+
+test('third Sunday repeats on the third Sunday', () => {
+  const r = { ...defaultRule('monthly', '2026-11-15'), ...monthlyChoices('2026-11-15')[1].patch };
+  assert.equal(monthlyChoiceKey(r, '2026-11-15'), 'nth');
+  assert.equal(nextDue('2026-11-15', r, parseKey('2026-11-15')), '2026-12-20');
+  assert.equal(describeRule(r), 'Monthly on the third Sunday');
+});
+
+test('changing the start date moves a rule that followed it', () => {
+  const byWeekday = { ...defaultRule('monthly', '2026-11-15'), monthMode: 'weekday', nth: 3, weekday: 0 };
+  assert.deepEqual(retargetRule(byWeekday, '2026-11-15', '2026-11-22'), { ...byWeekday, nth: 4, weekday: 0 });
+  const byDate = defaultRule('monthly', '2026-11-15');
+  assert.equal(retargetRule(byDate, '2026-11-15', '2026-11-22').monthDay, 22);
+  const custom = { ...byDate, monthDay: 1 };
+  assert.equal(retargetRule(custom, '2026-11-15', '2026-11-22').monthDay, 1);
+  assert.deepEqual(retargetRule(defaultRule('weekly', '2026-11-19'), '2026-11-19', '2026-11-22').weekdays, [0]);
+});

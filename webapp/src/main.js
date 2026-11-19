@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import htm from 'htm';
 import * as api from './backend.js';
 import {
-  CATS, MEALS, REMINDERS, REPEATS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, defaultRule, describeRule, firstDue, normalizeRule, weekdayPosition, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
+  CATS, MEALS, REMINDERS, REPEATS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, defaultRule, describeRule, firstDue, monthlyChoiceKey, monthlyChoices, normalizeRule, retargetRule, weekdayPosition, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
   googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, remindAtFor, leftoverOptions, eventPeople, startOfDay, startOfWeek, timeStr,
 } from './logic.js';
 
@@ -707,6 +707,8 @@ function Todos(ctx) {
 
 function RepeatEditor({ rule, start, onChange }) {
   const freq = rule === 'none' ? 'none' : rule.freq;
+  const choiceKey = monthlyChoiceKey(rule, start);
+  const [custom, setCustom] = useState(freq === 'monthly' && !choiceKey);
   const set = (patch) => onChange({ ...rule, ...patch });
   const unit = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'], yearly: ['year', 'years'] }[freq];
   const pos = weekdayPosition(parseKey(start));
@@ -722,6 +724,12 @@ function RepeatEditor({ rule, start, onChange }) {
           onClick=${() => { const w = on ? rule.weekdays.filter((x) => x !== i) : [...(rule.weekdays || []), i]; if (w.length) set({ weekdays: w.sort() }); }}>${d[0]}</button>`; })}
       </div>`}
       ${freq === 'monthly' && html`
+        <div className="stack" role="radiogroup" aria-label="Which day each month" style=${{ gap: 6 }}>
+          ${monthlyChoices(start).map((c) => html`<button key=${c.key} type="button" role="radio" aria-checked=${!custom && choiceKey === c.key ? 'true' : 'false'} className="choice"
+            onClick=${() => { setCustom(false); set(c.patch); }}><span className=${'radio' + (!custom && choiceKey === c.key ? ' on' : '')}></span>On ${c.label} of each month</button>`)}
+          <button type="button" role="radio" aria-checked=${custom ? 'true' : 'false'} className="choice" onClick=${() => setCustom(true)}><span className=${'radio' + (custom ? ' on' : '')}></span>Something else…</button>
+        </div>
+        ${custom && html`
         <div className="seg two" role="tablist" aria-label="Monthly by">
           <button role="tab" aria-selected=${rule.monthMode !== 'weekday' ? 'true' : 'false'} onClick=${() => set({ monthMode: 'date' })}>By date (e.g. the 15th)</button>
           <button role="tab" aria-selected=${rule.monthMode === 'weekday' ? 'true' : 'false'} onClick=${() => set({ monthMode: 'weekday' })}>By weekday (e.g. 2nd Tue)</button>
@@ -735,7 +743,7 @@ function RepeatEditor({ rule, start, onChange }) {
           : html`<div className="row">On the
             <select id="rp-day" value=${String(rule.monthDay)} onChange=${(e) => set({ monthDay: Number(e.target.value) })}>
               ${Array.from({ length: 31 }, (_, i) => html`<option key=${i + 1} value=${String(i + 1)}>${i + 1}</option>`)}<option value="-1">last day</option></select>
-            ${rule.monthDay > 28 && html`<span className="muted small">(last day in shorter months)</span>`}</div>`}`}
+            ${rule.monthDay > 28 && html`<span className="muted small">(last day in shorter months)</span>`}</div>`}`}`}
       ${freq === 'yearly' && html`<span className="muted small">On ${new Date(2001, rule.month, rule.day).toLocaleDateString([], { month: 'long', day: 'numeric' })}, from the start date.</span>`}
       <div className="repeat-sum"><strong>${describeRule(rule, start)}</strong> · next ${fmtShort(parseKey(firstDue(start, rule)))}</div>
     </div>`}
@@ -751,7 +759,7 @@ function TodoSheet(ctx) {
   });
   const repeating = f.rule !== 'none';
   const close = () => setSheet(null);
-  const setDue = (due) => setF({ ...f, due, rule: f.rule !== 'none' && f.rule.freq === 'yearly' ? { ...f.rule, month: parseKey(due).getMonth(), day: parseKey(due).getDate() } : f.rule });
+  const setDue = (due) => { if (due) setF({ ...f, due, rule: retargetRule(f.rule, f.due, due) }); };
   const save = async () => {
     if (!f.title.trim()) return say('What needs doing?');
     const dueDate = repeating ? firstDue(f.due, f.rule) : f.hasDue ? f.due : null;
@@ -769,10 +777,10 @@ function TodoSheet(ctx) {
       <${Chip} on=${f.assigneeId === null} onClick=${() => setF({ ...f, assigneeId: null })}>Anyone<//>
       ${memberIds.map((id) => html`<${Chip} key=${id} on=${f.assigneeId === id} color=${profiles[id]?.color} onClick=${() => setF({ ...f, assigneeId: id })}>${firstName(id)}${id === me?.id ? ' (me)' : ''}<//>`)}
     </div>
-    <span className="label">Repeat</span>
-    <${RepeatEditor} rule=${f.rule} start=${f.due} onChange=${(rule) => setF({ ...f, rule })} />
     ${!repeating && html`<label className="row"><input id="td-hasdue" type="checkbox" checked=${f.hasDue} onChange=${(e) => setF({ ...f, hasDue: e.target.checked })} /> Has a due date</label>`}
-    ${(f.hasDue || repeating) && html`<${Field} label=${!repeating ? 'Due' : todo ? 'Next due' : 'Starting'}><input id="td-due" type="date" value=${f.due} onChange=${(e) => setDue(e.target.value)} /><//>`}
+    ${(f.hasDue || repeating) && html`<${Field} label=${!repeating ? 'Due' : todo ? 'Next due' : 'First date'}><input id="td-due" type="date" value=${f.due} onChange=${(e) => setDue(e.target.value)} /><//>`}
+    <span className="label">Repeat</span>
+    <${RepeatEditor} key=${f.rule === 'none' ? 'none' : f.rule.freq} rule=${f.rule} start=${f.due} onChange=${(rule) => setF({ ...f, rule })} />
     ${repeating && html`<span className="muted small">Checking it off moves it to the next date automatically.</span>`}
     <${Field} label="Notes"><textarea id="td-notes" value=${f.notes} onChange=${(e) => setF({ ...f, notes: e.target.value })} placeholder="Details…"></textarea><//>
     ${by && html`<div className="row small muted"><${Avatar} p=${by} /> Last done by ${firstName(todo.completedBy)} on ${fmtShort(new Date(todo.completedAt))}</div>`}
