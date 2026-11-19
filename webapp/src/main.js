@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import htm from 'htm';
 import * as api from './backend.js';
 import {
-  CATS, MEALS, REMINDERS, REPEATS, addDays, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
+  CATS, MEALS, REMINDERS, REPEATS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, defaultRule, describeRule, firstDue, normalizeRule, weekdayPosition, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
   googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, remindAtFor, leftoverOptions, eventPeople, startOfDay, startOfWeek, timeStr,
 } from './logic.js';
 
@@ -665,7 +665,7 @@ function TodoRow(ctx) {
       <span className=${t.done ? 'done-text' : ''}>${t.title}</span>
       <span className="chips" style=${{ marginTop: 2 }}>
         ${t.dueDate && !t.done && html`<span className=${'pill' + (t.dueDate < tk ? ' warn' : '')}>${dueLabel(t.dueDate)}</span>`}
-        ${t.recurrence && t.recurrence !== 'none' && html`<span className="pill accent">↻ ${REPEATS.find((r) => r.key === t.recurrence)?.label}</span>`}
+        ${t.recurrence && t.recurrence !== 'none' && html`<span className="pill accent">↻ ${describeRule(t.recurrence, t.dueDate)}</span>`}
       </span>
     </button>
     ${p ? html`<${Avatar} p=${p} />` : html`<span className="muted small">Anyone</span>`}
@@ -705,19 +705,60 @@ function Todos(ctx) {
       ${showDone && html`<div className="list">${done.slice(0, 40).map((t) => html`<div key=${t.id} className="item"><${TodoRow} ...${ctx} t=${t} /></div>`)}</div>`}`}`;
 }
 
+function RepeatEditor({ rule, start, onChange }) {
+  const freq = rule === 'none' ? 'none' : rule.freq;
+  const set = (patch) => onChange({ ...rule, ...patch });
+  const unit = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'], yearly: ['year', 'years'] }[freq];
+  const pos = weekdayPosition(parseKey(start));
+  return html`<div className="stack" style=${{ gap: 10 }}>
+    <div className="chips">${REPEATS.map((r) => html`<${Chip} key=${r.key} on=${freq === r.key} onClick=${() => onChange(defaultRule(r.key, start))}>${r.label}<//>`)}</div>
+    ${freq !== 'none' && html`<div className="card repeat">
+      <label className="row">Every
+        <input id="rp-interval" type="number" inputMode="numeric" min="1" max="99" className="num-in" value=${rule.interval}
+          onChange=${(e) => set({ interval: Math.max(1, Math.min(99, Number(e.target.value) || 1)) })} />
+        ${rule.interval === 1 ? unit[0] : unit[1]}</label>
+      ${freq === 'weekly' && html`<div className="weekdays" role="group" aria-label="On these days">
+        ${WEEKDAY_SHORT.map((d, i) => { const on = (rule.weekdays || []).includes(i); return html`<button key=${i} type="button" aria-pressed=${on ? 'true' : 'false'} aria-label=${WEEKDAY_LONG[i]}
+          onClick=${() => { const w = on ? rule.weekdays.filter((x) => x !== i) : [...(rule.weekdays || []), i]; if (w.length) set({ weekdays: w.sort() }); }}>${d[0]}</button>`; })}
+      </div>`}
+      ${freq === 'monthly' && html`
+        <div className="seg two" role="tablist" aria-label="Monthly by">
+          <button role="tab" aria-selected=${rule.monthMode !== 'weekday' ? 'true' : 'false'} onClick=${() => set({ monthMode: 'date' })}>By date (e.g. the 15th)</button>
+          <button role="tab" aria-selected=${rule.monthMode === 'weekday' ? 'true' : 'false'} onClick=${() => set({ monthMode: 'weekday' })}>By weekday (e.g. 2nd Tue)</button>
+        </div>
+        ${rule.monthMode === 'weekday' ? html`<div className="row">On the
+            <select id="rp-nth" value=${String(rule.nth)} onChange=${(e) => set({ nth: Number(e.target.value) })}>
+              ${[[1, 'first'], [2, 'second'], [3, 'third'], [4, 'fourth'], [-1, 'last']].map(([v, l]) => html`<option key=${v} value=${String(v)}>${l}</option>`)}</select>
+            <select id="rp-wd" value=${String(rule.weekday)} onChange=${(e) => set({ weekday: Number(e.target.value) })}>
+              ${WEEKDAY_LONG.map((l, i) => html`<option key=${i} value=${String(i)}>${l}</option>`)}</select></div>
+            ${pos.last && pos.nth === 4 && rule.nth !== -1 && html`<button className="btn ghost sm" style=${{ alignSelf: 'flex-start' }} onClick=${() => set({ nth: -1, weekday: pos.weekday })}>Use the last ${WEEKDAY_LONG[pos.weekday]} instead</button>`}`
+          : html`<div className="row">On the
+            <select id="rp-day" value=${String(rule.monthDay)} onChange=${(e) => set({ monthDay: Number(e.target.value) })}>
+              ${Array.from({ length: 31 }, (_, i) => html`<option key=${i + 1} value=${String(i + 1)}>${i + 1}</option>`)}<option value="-1">last day</option></select>
+            ${rule.monthDay > 28 && html`<span className="muted small">(last day in shorter months)</span>`}</div>`}`}
+      ${freq === 'yearly' && html`<span className="muted small">On ${new Date(2001, rule.month, rule.day).toLocaleDateString([], { month: 'long', day: 'numeric' })}, from the start date.</span>`}
+      <div className="repeat-sum"><strong>${describeRule(rule, start)}</strong> · next ${fmtShort(parseKey(firstDue(start, rule)))}</div>
+    </div>`}
+  </div>`;
+}
+
 function TodoSheet(ctx) {
   const { todo, write, setSheet, say, me, memberIds, profiles, firstName, person } = ctx;
+  const startDue = todo?.dueDate || dayKey(new Date());
   const [f, setF] = useState({
     title: todo?.title || '', notes: todo?.notes || '', assigneeId: todo?.assigneeId ?? null,
-    hasDue: !!todo?.dueDate, due: todo?.dueDate || dayKey(new Date()), recurrence: todo?.recurrence || 'none',
+    hasDue: !!todo?.dueDate, due: startDue, rule: normalizeRule(todo?.recurrence, startDue),
   });
+  const repeating = f.rule !== 'none';
   const close = () => setSheet(null);
+  const setDue = (due) => setF({ ...f, due, rule: f.rule !== 'none' && f.rule.freq === 'yearly' ? { ...f.rule, month: parseKey(due).getMonth(), day: parseKey(due).getDate() } : f.rule });
   const save = async () => {
     if (!f.title.trim()) return say('What needs doing?');
-    const hasDue = f.hasDue || f.recurrence !== 'none';
-    const body = { title: f.title.trim(), notes: f.notes.trim(), assigneeId: f.assigneeId, dueDate: hasDue ? f.due : null, recurrence: f.recurrence, updatedBy: me?.id || null };
+    const dueDate = repeating ? firstDue(f.due, f.rule) : f.hasDue ? f.due : null;
+    const body = { title: f.title.trim(), notes: f.notes.trim(), assigneeId: f.assigneeId, dueDate, recurrence: f.rule, updatedBy: me?.id || null };
     const ok = await write((db) => todo ? db.doc(`todos/${todo.id}`).update(body)
-      : db.collection('todos').add({ ...body, done: false, completedAt: null, completedBy: null, createdBy: me?.id || null, createdAt: Date.now() }), todo ? 'To-do updated' : 'To-do added');
+      : db.collection('todos').add({ ...body, done: false, completedAt: null, completedBy: null, createdBy: me?.id || null, createdAt: Date.now() }),
+      repeating ? `Saved. First due ${fmtShort(parseKey(dueDate))}` : todo ? 'To-do updated' : 'To-do added');
     if (ok) close();
   };
   const by = todo?.completedBy && person(todo.completedBy);
@@ -729,10 +770,10 @@ function TodoSheet(ctx) {
       ${memberIds.map((id) => html`<${Chip} key=${id} on=${f.assigneeId === id} color=${profiles[id]?.color} onClick=${() => setF({ ...f, assigneeId: id })}>${firstName(id)}${id === me?.id ? ' (me)' : ''}<//>`)}
     </div>
     <span className="label">Repeat</span>
-    <div className="chips">${REPEATS.map((r) => html`<${Chip} key=${r.key} on=${f.recurrence === r.key} onClick=${() => setF({ ...f, recurrence: r.key, hasDue: r.key !== 'none' ? true : f.hasDue })}>${r.label}<//>`)}</div>
-    <label className="row"><input id="td-hasdue" type="checkbox" checked=${f.hasDue || f.recurrence !== 'none'} disabled=${f.recurrence !== 'none'} onChange=${(e) => setF({ ...f, hasDue: e.target.checked })} /> Has a due date</label>
-    ${(f.hasDue || f.recurrence !== 'none') && html`<${Field} label=${f.recurrence === 'none' ? 'Due' : 'Next due'}><input id="td-due" type="date" value=${f.due} onChange=${(e) => setF({ ...f, due: e.target.value })} /><//>`}
-    ${f.recurrence !== 'none' && html`<span className="muted small">Checking it off moves it to the next due date automatically.</span>`}
+    <${RepeatEditor} rule=${f.rule} start=${f.due} onChange=${(rule) => setF({ ...f, rule })} />
+    ${!repeating && html`<label className="row"><input id="td-hasdue" type="checkbox" checked=${f.hasDue} onChange=${(e) => setF({ ...f, hasDue: e.target.checked })} /> Has a due date</label>`}
+    ${(f.hasDue || repeating) && html`<${Field} label=${!repeating ? 'Due' : todo ? 'Next due' : 'Starting'}><input id="td-due" type="date" value=${f.due} onChange=${(e) => setDue(e.target.value)} /><//>`}
+    ${repeating && html`<span className="muted small">Checking it off moves it to the next date automatically.</span>`}
     <${Field} label="Notes"><textarea id="td-notes" value=${f.notes} onChange=${(e) => setF({ ...f, notes: e.target.value })} placeholder="Details…"></textarea><//>
     ${by && html`<div className="row small muted"><${Avatar} p=${by} /> Last done by ${firstName(todo.completedBy)} on ${fmtShort(new Date(todo.completedAt))}</div>`}
     <button className="btn" onClick=${save}>${todo ? 'Save changes' : 'Add to-do'}</button>

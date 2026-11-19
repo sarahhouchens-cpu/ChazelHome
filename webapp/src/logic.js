@@ -9,7 +9,7 @@ export const CATS = [
 ];
 export const REPEATS = [
   { key: 'none', label: 'Once' }, { key: 'daily', label: 'Daily' }, { key: 'weekly', label: 'Weekly' },
-  { key: 'biweekly', label: 'Every 2 weeks' }, { key: 'monthly', label: 'Monthly' },
+  { key: 'monthly', label: 'Monthly' }, { key: 'yearly', label: 'Yearly' },
 ];
 export const REMINDERS = [null, 0, 10, 30, 60, 120, 1440, 2880];
 
@@ -30,15 +30,124 @@ export const fmtDay = (d) => d.toLocaleDateString([], { weekday: 'long', month: 
 export const fmtShort = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 export const timeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-/** Next due date for a repeating to-do, always after today. */
+// ---------- repeating to-dos ----------
+// A rule is 'none' or an object:
+//   { freq: 'daily' | 'weekly' | 'monthly' | 'yearly', interval: n,
+//     weekdays: [0-6]            (weekly; 0 = Sunday)
+//     monthMode: 'date' | 'weekday', monthDay: 1-31 | -1 (last),   (monthly by date)
+//     nth: 1-4 | -1 (last), weekday: 0-6 }                          (monthly by weekday)
+// Older to-dos stored 'daily' | 'weekly' | 'biweekly' | 'monthly'; normalizeRule reads both.
+
+export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const WEEKDAY_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const lastDayOf = (y, m) => new Date(y, m + 1, 0).getDate();
+const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <= 13) ? 0 : n % 10] || 'th');
+const NTH = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', '-1': 'last' };
+
+/** Which week of its month a date falls in (1-4), and whether it's the last such weekday. */
+export function weekdayPosition(d) {
+  return { nth: Math.min(4, Math.ceil(d.getDate() / 7)), last: d.getDate() + 7 > lastDayOf(d.getFullYear(), d.getMonth()), weekday: d.getDay() };
+}
+
+/** A sensible rule of the given kind, anchored on a start date. */
+export function defaultRule(freq, startKey) {
+  if (freq === 'none') return 'none';
+  const d = parseKey(startKey);
+  const rule = { freq, interval: 1 };
+  if (freq === 'weekly') rule.weekdays = [d.getDay()];
+  if (freq === 'monthly') Object.assign(rule, { monthMode: 'date', monthDay: d.getDate(), nth: weekdayPosition(d).nth, weekday: d.getDay() });
+  if (freq === 'yearly') Object.assign(rule, { month: d.getMonth(), day: d.getDate() });
+  return rule;
+}
+
+export function normalizeRule(r, anchorKey) {
+  if (!r || r === 'none') return 'none';
+  if (typeof r === 'object') return { interval: 1, ...r, interval: Math.max(1, Number(r.interval) || 1) };
+  const anchor = anchorKey || dayKey(new Date());
+  if (r === 'daily') return defaultRule('daily', anchor);
+  if (r === 'weekly') return defaultRule('weekly', anchor);
+  if (r === 'biweekly') return { ...defaultRule('weekly', anchor), interval: 2 };
+  if (r === 'monthly') return defaultRule('monthly', anchor);
+  return 'none';
+}
+
+function nthWeekdayOf(y, m, nth, weekday) {
+  if (nth === -1) {
+    const last = new Date(y, m, lastDayOf(y, m));
+    return addDays(last, -((last.getDay() - weekday + 7) % 7));
+  }
+  const first = new Date(y, m, 1);
+  return new Date(y, m, 1 + ((weekday - first.getDay() + 7) % 7) + (nth - 1) * 7);
+}
+
+function dateInMonth(y, m, rule, yearlyDay) {
+  if (rule.freq === 'yearly') return new Date(y, m, Math.min(yearlyDay, lastDayOf(y, m)));
+  if (rule.monthMode === 'weekday') return nthWeekdayOf(y, m, rule.nth, rule.weekday);
+  return new Date(y, m, rule.monthDay === -1 ? lastDayOf(y, m) : Math.min(rule.monthDay, lastDayOf(y, m)));
+}
+
+/** First occurrence of the rule strictly after `fromKey`, counting intervals from `fromKey`. */
+function nextAfter(fromKey, rule) {
+  const from = parseKey(fromKey);
+  const n = rule.interval || 1;
+  if (rule.freq === 'daily') return addDays(from, n);
+  if (rule.freq === 'weekly') {
+    const days = rule.weekdays?.length ? rule.weekdays : [from.getDay()];
+    const week0 = startOfWeek(from);
+    for (let i = 1; i <= 7 * n + 7; i++) {
+      const d = addDays(from, i);
+      const weeks = Math.round((startOfWeek(d) - week0) / (7 * 86400000));
+      if (weeks % n === 0 && days.includes(d.getDay())) return d;
+    }
+    return addDays(from, 7 * n);
+  }
+  // monthly / yearly: try this period, then every `n` months (or 12n for yearly).
+  const step = rule.freq === 'yearly' ? 12 * n : n;
+  const month = rule.freq === 'yearly' ? (rule.month ?? from.getMonth()) : from.getMonth();
+  const yearlyDay = rule.day ?? from.getDate();
+  for (let k = 0; k < 400; k += step) {
+    const ref = new Date(from.getFullYear(), month + k, 1);
+    const d = dateInMonth(ref.getFullYear(), ref.getMonth(), rule, yearlyDay);
+    if (d > from) return d;
+  }
+  return addMonths(from, step);
+}
+
+/** The first date on or after `startKey` that fits the rule (used when a to-do is saved). */
+export function firstDue(startKey, rule) {
+  const r = normalizeRule(rule, startKey);
+  if (r === 'none') return startKey;
+  return dayKey(nextAfter(dayKey(addDays(parseKey(startKey), -1)), { ...r, interval: 1 }));
+}
+
+/** Next due date for a repeating to-do after it's checked off, always after today. */
 export function nextDue(current, repeat, today = new Date()) {
-  if (!repeat || repeat === 'none') return current;
-  const step = (d) => repeat === 'daily' ? addDays(d, 1) : repeat === 'weekly' ? addDays(d, 7)
-    : repeat === 'biweekly' ? addDays(d, 14) : addMonths(d, 1);
-  let next = step(current ? parseKey(current) : startOfDay(today));
+  const rule = normalizeRule(repeat, current);
+  if (rule === 'none') return current;
   const t0 = startOfDay(today);
-  while (next <= t0) next = step(next);
+  let next = nextAfter(current || dayKey(t0), rule);
+  for (let guard = 0; next <= t0 && guard < 1000; guard++) next = nextAfter(dayKey(next), rule);
   return dayKey(next);
+}
+
+/** "Every 2 weeks on Mon, Thu", "Monthly on the last Friday", … */
+export function describeRule(repeat, anchorKey) {
+  const r = normalizeRule(repeat, anchorKey);
+  if (r === 'none') return 'Once';
+  const n = r.interval || 1;
+  const every = (unit, plural) => (n === 1 ? unit : `Every ${n} ${plural}`);
+  if (r.freq === 'daily') return n === 1 ? 'Every day' : `Every ${n} days`;
+  if (r.freq === 'weekly') {
+    const days = [...(r.weekdays || [])].sort();
+    const list = days.length === 7 ? 'every day' : days.length === 5 && !days.includes(0) && !days.includes(6) ? 'weekdays' : days.map((d) => WEEKDAY_SHORT[d]).join(', ');
+    return `${every('Weekly', 'weeks')} on ${list}`;
+  }
+  if (r.freq === 'monthly') {
+    const on = r.monthMode === 'weekday' ? `the ${NTH[r.nth]} ${WEEKDAY_LONG[r.weekday]}` : r.monthDay === -1 ? 'the last day' : `the ${ordinal(r.monthDay)}`;
+    return `${every('Monthly', 'months')} on ${on}`;
+  }
+  const a = r.month !== undefined ? new Date(2001, r.month, r.day) : anchorKey ? parseKey(anchorKey) : new Date();
+  return `${every('Yearly', 'years')} on ${a.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
 }
 
 export function dueLabel(key, today = new Date()) {
