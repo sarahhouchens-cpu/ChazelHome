@@ -30,14 +30,23 @@ Paste that `firebaseConfig` into [`docs/config.js`](docs/config.js) (on GitHub: 
 3. They open the website, create their own account, choose **Join an existing home** and enter the code.
 4. On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app icon.
 
-## Reminders
-When an event's reminder time arrives, the Today page shows a "Coming up" note. For a notification on your phone, open the event and choose **Add to Google Calendar**; the Google Calendar app sends the alert.
+## Notifications
+Phones get a notification for event reminders, when someone else adds an event, and when someone assigns you a to-do. Setup, once:
+1. **Firebase billing:** Firebase console → upgrade to the **Blaze (pay as you go)** plan and set a budget alert (e.g. $1). A household's usage stays in the free allowance.
+2. **Web push key:** Project settings → **Cloud Messaging** → **Web Push certificates** → **Generate key pair**. Put the key in `vapidKey` in `docs/config.js` and `webapp/public/config.js` (or send it to Claude).
+3. **Background jobs:** open <https://console.cloud.google.com>, click the **Activate Cloud Shell** button (`>_`, top right), and paste:
+   ```
+   git clone https://github.com/sarahhouchens-cpu/ChazelHome && bash ChazelHome/deploy-notifications.sh
+   ```
+   To update later: `bash ChazelHome/deploy-notifications.sh`.
+4. **Each phone:** on iPhone (iOS 16.4 or later), add HomeIQ to the Home Screen from Safari, open it from that icon, then **Household → Turn on notifications**. On Android or a computer, just tap the button.
 
 ## For developers
 - Website source: `webapp/` (React + Firebase, built with Vite). `cd webapp && npm install && npm run build` writes the site into `docs/` (keep `webapp/public/config.js` matching `docs/config.js`, or a rebuild will blank the settings). `npm test` runs the logic tests.
 - `firestore.rules`: who can read and write what. Tested in `rules-tests/` with the Firestore emulator.
 - `web/homeiq.html`: the earlier claude.ai version (https://claude.ai/artifact/18huTwwcpmg1pfu2E6jucg).
-- `src/`, `functions/`, `app.json`: the earlier iPhone app (Expo + Firebase), kept for reference. Its setup notes follow.
+- `functions/`: notification jobs (Firebase Cloud Functions), deployed by `deploy-notifications.sh`.
+- `src/`, `app.json`: the earlier iPhone app (Expo + Firebase), kept for reference. Its setup notes follow.
 
 ---
 

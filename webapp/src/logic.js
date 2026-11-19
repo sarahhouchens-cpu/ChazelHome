@@ -106,3 +106,13 @@ export function planGroceries(ingredients, shopping) {
   }
   return { updates: [...updates].map(([id, quantity]) => ({ id, quantity })), additions: [...additions.values()] };
 }
+
+/**
+ * When an event's reminder should fire (epoch ms), or null for no reminder.
+ * All-day events remind relative to 9:00 AM local time on their first day.
+ */
+export function remindAtFor(e) {
+  if (e.reminderMinutes === null || e.reminderMinutes === undefined) return null;
+  const base = e.allDay ? new Date(e.start).setHours(9, 0, 0, 0) : e.start;
+  return base - e.reminderMinutes * 60000;
+}

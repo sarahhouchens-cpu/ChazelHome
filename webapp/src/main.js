@@ -4,7 +4,7 @@ import htm from 'htm';
 import * as api from './backend.js';
 import {
   CATS, MEALS, REMINDERS, REPEATS, addDays, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
-  googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, startOfDay, startOfWeek, timeStr,
+  googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, remindAtFor, startOfDay, startOfWeek, timeStr,
 } from './logic.js';
 
 const html = htm.bind(React.createElement);
@@ -85,19 +85,8 @@ function Root() {
   useEffect(() => {
     if (!homeId) { setHome(null); return; }
     setHome(undefined);
-    // Right after creating or joining, the profile can update a moment before the server has
-    // the new membership, so a first "no access" is retried a few times. If the home stays
-    // unreadable (you left, or were removed), fall back to setup.
-    let unsub = () => {}; let tries = 0; let timer; let alive = true;
-    const listen = () => {
-      unsub = api.watchHome(homeId, (h) => { tries = 0; setHome(h); }, () => {
-        if (!alive) return;
-        if (tries++ < 5) timer = setTimeout(listen, 600 * tries);
-        else setHome(null);
-      });
-    };
-    listen();
-    return () => { alive = false; clearTimeout(timer); unsub(); };
+    // If the home stays unreadable (you left, or were removed), fall back to setup.
+    return api.watchHome(homeId, setHome, () => setHome(null));
   }, [homeId]);
 
   if (!authState.ready || (authState.uid && profile === undefined) || (homeId && home === undefined)) return html`<${Loading} />`;
@@ -205,6 +194,7 @@ function App({ uid, home }) {
   const person = (id) => (id ? profiles[id] : null);
   const firstName = (id) => ((profiles[id]?.name || '').split(' ')[0] || 'Someone');
   const me = { id: uid };
+  useEffect(() => { api.refreshPush(); }, [uid]);
 
   const write = async (fn, okMsg) => {
     try { await fn(db); if (okMsg) say(okMsg); return true; }
@@ -249,7 +239,7 @@ async function addToGroceries(db, recipe, shopping, uid) {
 
 // ---------- Today ----------
 function Today(ctx) {
-  const { data, me, firstName, profiles, person, setSheet } = ctx;
+  const { data, me, firstName, profiles, person, setSheet, say } = ctx;
   const now = new Date(); const tk = dayKey(now);
   const events = data.events || [];
   const upcoming = events.filter((e) => (e.end || e.start) >= startOfDay(now).getTime() && e.start < addDays(startOfDay(now), 7).getTime()).sort((a, b) => a.start - b.start);
@@ -268,6 +258,7 @@ function Today(ctx) {
       <span className="muted">${fmtDay(now)}</span>
       <h1>${greet}${name ? `, ${name}` : ''}</h1>
     </div>
+    <${PushPrompt} say=${say} />
     ${remindNow.map((e) => html`<div key=${e.id} className="notice"><strong>Coming up:</strong> ${e.title} at ${fmtTime(e.start)}</div>`)}
     <div className="grid2">
       <section className="card">
@@ -363,6 +354,9 @@ function EventSheet(ctx) {
     const end = f.allDay ? parseKey(f.endDay).getTime() + 86340000 : at(f.endDay, f.end);
     if (end < start) return say('The event ends before it starts.');
     const body = { title: f.title.trim(), start, end, allDay: f.allDay, notes: f.notes.trim(), reminderMinutes: f.reminder === '' || f.reminder === null ? null : Number(f.reminder), createdBy: event?.createdBy || me?.id || null };
+    body.remindAt = remindAtFor(body);
+    body.reminderSent = body.remindAt === null || body.remindAt <= Date.now();
+    body.tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
     if (await write((db) => event ? db.doc(`events/${event.id}`).set(body) : db.collection('events').add(body), event ? 'Event updated' : 'Event added')) close();
   };
 
@@ -381,7 +375,7 @@ function EventSheet(ctx) {
     <${Field} label="Notes"><textarea id="ev-notes" value=${f.notes} onChange=${set('notes')} placeholder="Address, what to bring…"></textarea><//>
     <button className="btn" onClick=${save}>${event ? 'Save changes' : 'Add event'}</button>
     ${event && html`
-      <div className="notice small">Want a phone alert? <a href=${googleCalLink(event)} target="_blank" rel="noopener">Add it to Google Calendar</a> and its app will notify you. HomeIQ also shows a “Coming up” note on the Today page when the reminder time arrives.</div>
+      <div className="notice small">The reminder goes to every phone in your home with notifications turned on (Household → Notifications). You can also <a href=${googleCalLink(event)} target="_blank" rel="noopener">add it to Google Calendar</a>.</div>
       <${ConfirmDelete} label="Delete event" onConfirm=${async () => { if (await write((db) => db.doc(`events/${event.id}`).delete(), 'Event deleted')) close(); }} />`}
   <//>`;
 }
@@ -654,7 +648,7 @@ function TodoSheet(ctx) {
   const save = async () => {
     if (!f.title.trim()) return say('What needs doing?');
     const hasDue = f.hasDue || f.recurrence !== 'none';
-    const body = { title: f.title.trim(), notes: f.notes.trim(), assigneeId: f.assigneeId, dueDate: hasDue ? f.due : null, recurrence: f.recurrence };
+    const body = { title: f.title.trim(), notes: f.notes.trim(), assigneeId: f.assigneeId, dueDate: hasDue ? f.due : null, recurrence: f.recurrence, updatedBy: me?.id || null };
     const ok = await write((db) => todo ? db.doc(`todos/${todo.id}`).update(body)
       : db.collection('todos').add({ ...body, done: false, completedAt: null, completedBy: null, createdBy: me?.id || null, createdAt: Date.now() }), todo ? 'To-do updated' : 'To-do added');
     if (ok) close();
@@ -677,6 +671,45 @@ function TodoSheet(ctx) {
     <button className="btn" onClick=${save}>${todo ? 'Save changes' : 'Add to-do'}</button>
     ${todo && html`<${ConfirmDelete} label="Delete to-do" onConfirm=${async () => { if (await write((db) => db.doc(`todos/${todo.id}`).delete(), 'To-do deleted')) close(); }} />`}
   <//>`;
+}
+
+
+// ---------- notifications ----------
+const PUSH_COPY = {
+  on: 'Notifications are on for this device. You\u2019ll get event reminders, new events from your household, and to-dos assigned to you.',
+  off: 'Get event reminders, a heads-up when someone adds an event, and a notice when a to-do is assigned to you.',
+  blocked: 'Notifications are blocked for HomeIQ. Turn them on in your phone or browser settings, then reload.',
+  'home-screen': 'On iPhone, notifications work once HomeIQ is on your Home Screen: in Safari tap Share → Add to Home Screen, then open HomeIQ from that icon and turn them on here.',
+  unsupported: 'This browser can\u2019t receive notifications from websites. Try Safari on iPhone (from the Home Screen icon) or Chrome.',
+};
+function usePushState() {
+  const [state, setState] = useState(null);
+  const refresh = () => api.pushState().then(setState).catch(() => setState('unsupported'));
+  useEffect(() => { refresh(); }, []);
+  return [state, refresh];
+}
+function PushCard({ say, compact, onDismiss }) {
+  const [state, refresh] = usePushState();
+  const [busy, setBusy] = useState(false);
+  if (!state || (compact && state !== 'off' && state !== 'home-screen')) return null;
+  const turnOn = async () => {
+    setBusy(true);
+    try { await api.enablePush(); say('Notifications are on for this device'); }
+    catch (e) { say(api.friendlyError(e)); }
+    finally { setBusy(false); refresh(); }
+  };
+  return html`<section className=${'card' + (compact ? ' notice-card' : '')}>
+    <div className="between"><span className="label">Notifications</span>
+      ${state === 'on' && html`<span className="pill accent">On</span>`}
+      ${compact && html`<button className="iconbtn" aria-label="Dismiss" onClick=${onDismiss}>✕</button>`}</div>
+    <span>${PUSH_COPY[state]}</span>
+    ${state === 'off' && html`<button className="btn" style=${{ alignSelf: 'flex-start' }} disabled=${busy} onClick=${turnOn}>${busy ? 'Turning on…' : 'Turn on notifications'}</button>`}
+  </section>`;
+}
+function PushPrompt({ say }) {
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem('homeiq-push-prompt') === 'hide'; } catch { return false; } });
+  if (hidden) return null;
+  return html`<${PushCard} say=${say} compact onDismiss=${() => { setHidden(true); try { localStorage.setItem('homeiq-push-prompt', 'hide'); } catch {} }} />`;
 }
 
 // ---------- Household ----------
@@ -730,11 +763,8 @@ function Household(ctx) {
       <span className="muted small">Your color</span>
       <div className="row" style=${{ flexWrap: 'wrap' }}>${api.MEMBER_COLORS.map((c) => html`<button key=${c} type="button" className="swatch" aria-label=${'Color ' + c} aria-pressed=${mine?.color === c ? 'true' : 'false'} style=${{ background: c }} onClick=${() => act(() => api.updateMe({ color: c }))}></button>`)}</div>
     </form>
-    <section className="card">
-      <span className="label">Reminders</span>
-      <span>When an event's reminder time arrives, the Today page shows a “Coming up” note. For a notification on your phone, open the event and choose <strong>Add to Google Calendar</strong>; the Google Calendar app sends the alert.</span>
-      <span className="muted small">Tip: on iPhone, open this site in Safari and use Share → Add to Home Screen to get an app icon.</span>
-    </section>
+    <${PushCard} say=${say} />
+    <span className="muted small">Tip: for alerts in Google Calendar too, open an event and choose Add to Google Calendar.</span>
     <div className="row" style=${{ flexWrap: 'wrap' }}>
       <button className="btn secondary" onClick=${api.signOut}>Sign out</button>
       ${!leaving ? html`<button className="btn danger" onClick=${() => setLeaving(true)}>Leave home</button>` : html`

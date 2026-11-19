@@ -8,5 +8,7 @@ window.HOMEIQ_FIREBASE = {
   storageBucket: "homeiq-61b06.firebasestorage.app",
   messagingSenderId: "39367089415",
   appId: "1:39367089415:web:eeb64bb453dbea928bf9a2",
-  measurementId: "G-6Q2LNE7385"
+  measurementId: "G-6Q2LNE7385",
+  // Web push key: Firebase console → Project settings → Cloud Messaging → Web Push certificates.
+  vapidKey: ""
 };

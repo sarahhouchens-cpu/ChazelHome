@@ -1,4 +1,5 @@
 import { getApps, initializeApp } from 'firebase/app';
+import { getMessaging, getToken, isSupported as messagingSupported } from 'firebase/messaging';
 import {
   browserLocalPersistence, connectAuthEmulator, createUserWithEmailAndPassword, getAuth, onAuthStateChanged, sendPasswordResetEmail,
   setPersistence, signInWithEmailAndPassword, signOut as fbSignOut, updateProfile,
@@ -12,9 +13,9 @@ import {
 export const config = window.HOMEIQ_FIREBASE || {};
 export const configured = Boolean(config.apiKey && config.projectId);
 
-let auth, db;
+let app, auth, db;
 if (configured) {
-  const app = getApps()[0] || initializeApp(config);
+  app = getApps()[0] || initializeApp(config);
   auth = getAuth(app);
   setPersistence(auth, browserLocalPersistence).catch(() => {});
   try {
@@ -34,6 +35,25 @@ export const MEMBER_COLORS = ['#1E6E57', '#B4442F', '#3A64A8', '#A2508C', '#9A6B
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const makeCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
 
+
+/**
+ * onSnapshot that survives the moment right after creating or joining a home, when this
+ * device can ask for data a beat before the server knows it's a member. A "no access"
+ * answer is retried a few times before it's reported.
+ */
+function liveSnapshot(target, next, error) {
+  let unsub = () => {}; let tries = 0; let timer; let alive = true;
+  const listen = () => {
+    unsub = onSnapshot(target, (snap) => { tries = 0; next(snap); }, (e) => {
+      if (!alive) return;
+      if (e?.code === 'permission-denied' && tries++ < 5) timer = setTimeout(listen, 600 * tries);
+      else error?.(e);
+    });
+  };
+  listen();
+  return () => { alive = false; clearTimeout(timer); unsub(); };
+}
+
 // ---------- accounts ----------
 export const onAuth = (fn) => onAuthStateChanged(auth, fn);
 export const currentUid = () => auth.currentUser?.uid || null;
@@ -51,7 +71,7 @@ export const signOut = () => fbSignOut(auth);
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 
 export function watchUser(uid, next, error) {
-  return onSnapshot(doc(db, 'users', uid), (s) => next(s.exists() ? { id: s.id, ...s.data() } : null), error);
+  return liveSnapshot(doc(db, 'users', uid), (s) => next(s.exists() ? { id: s.id, ...s.data() } : null), error);
 }
 export async function updateMe(patch) {
   const me = auth.currentUser;
@@ -61,7 +81,7 @@ export async function updateMe(patch) {
 
 // ---------- homes ----------
 export function watchHome(homeId, next, error) {
-  return onSnapshot(doc(db, 'homes', homeId), (s) => next(s.exists() ? { id: s.id, ...s.data() } : null), error);
+  return liveSnapshot(doc(db, 'homes', homeId), (s) => next(s.exists() ? { id: s.id, ...s.data() } : null), error);
 }
 
 export async function createHome(name) {
@@ -107,7 +127,7 @@ export function homeStore(homeId) {
   return {
     collection: (c) => ({
       add: (data) => addDoc(collection(db, ...base, c), data),
-      onSnapshot: (next, error) => onSnapshot(collection(db, ...base, c), { includeMetadataChanges: false },
+      onSnapshot: (next, error) => liveSnapshot(collection(db, ...base, c),
         (s) => next({ docs: s.docs.map((d) => ({ id: d.id, data: () => d.data() })), metadata: s.metadata }), error),
     }),
     doc: (path) => {
@@ -132,4 +152,43 @@ export function friendlyError(e) {
     'unavailable': 'Can’t reach the server. Your change will save when you’re back online.',
   };
   return map[e?.code] || e?.message || 'Something went wrong. Try again.';
+}
+
+// ---------- push notifications ----------
+const PUSH_FLAG = 'homeiq-push-uid';
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+
+/**
+ * Where this device stands: 'on', 'off' (can be turned on), 'blocked' (denied in settings),
+ * 'home-screen' (iPhone: must be opened from the Home Screen icon first), or 'unsupported'.
+ */
+export async function pushState() {
+  if (isIOS() && !isStandalone()) return 'home-screen';
+  if (!('serviceWorker' in navigator) || !('Notification' in window) || !(await messagingSupported().catch(() => false))) return 'unsupported';
+  if (!config.vapidKey) return 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  let flag = null; try { flag = localStorage.getItem(PUSH_FLAG); } catch {}
+  return Notification.permission === 'granted' && flag === auth.currentUser?.uid ? 'on' : 'off';
+}
+
+async function registerToken() {
+  const reg = await navigator.serviceWorker.register('./sw.js');
+  await navigator.serviceWorker.ready;
+  const token = await getToken(getMessaging(app), { vapidKey: config.vapidKey, serviceWorkerRegistration: reg });
+  if (!token) throw new Error('This browser didn\u2019t give a notification address. Try again.');
+  await updateDoc(doc(db, 'users', auth.currentUser.uid), { webPushTokens: arrayUnion(token) });
+  try { localStorage.setItem(PUSH_FLAG, auth.currentUser.uid); } catch {}
+}
+
+/** Ask permission (must run from a tap) and register this device. */
+export async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Notifications are off for HomeIQ. Allow them in your phone\u2019s Settings → Notifications → HomeIQ.');
+  await registerToken();
+}
+
+/** Tokens can change; refresh quietly on each visit once notifications are on. */
+export async function refreshPush() {
+  try { if ((await pushState()) === 'on') await registerToken(); } catch (e) { console.warn('push refresh failed', e); }
 }

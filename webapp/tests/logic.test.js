@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { googleCalLink, nextDue, parseIngredients, parseKey, planGroceries } from '../src/logic.js';
+import { googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, remindAtFor } from '../src/logic.js';
 
 test('repeating to-dos roll forward past today', () => {
   assert.equal(nextDue('2026-11-10', 'none', parseKey('2026-11-15')), '2026-11-10');
@@ -38,4 +38,12 @@ test('merges recipe ingredients into the grocery list', () => {
 test('google calendar link', () => {
   const url = googleCalLink({ title: 'Dinner', start: Date.UTC(2026, 10, 20, 23), end: Date.UTC(2026, 10, 21, 0) });
   assert.match(url, /dates=20261120T230000Z%2F20261121T000000Z/);
+});
+
+test('reminder times', () => {
+  const start = new Date(2026, 10, 20, 17, 0).getTime();
+  assert.equal(remindAtFor({ start, allDay: false, reminderMinutes: 30 }), start - 30 * 60000);
+  assert.equal(remindAtFor({ start, allDay: false, reminderMinutes: null }), null);
+  const dayStart = new Date(2026, 10, 20).getTime();
+  assert.equal(remindAtFor({ start: dayStart, allDay: true, reminderMinutes: 1440 }), new Date(2026, 10, 19, 9, 0).getTime());
 });

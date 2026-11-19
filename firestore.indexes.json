@@ -7,6 +7,14 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "checked", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "reminderSent", "order": "ASCENDING" },
+        { "fieldPath": "remindAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
