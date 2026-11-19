@@ -1,0 +1,902 @@
+<title>HomeIQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a calm app shell. Header + section tabs, one working column, sheets slide up for editing. */
+:root {
+  --bg: #EEF2F0;
+  --surface: #FFFFFF;
+  --sunk: #E3E9E6;
+  --ink: #16201C;
+  --muted: #5B6863;
+  --line: #D3DCD8;
+  --accent: #1E6E57;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #D7EAE2;
+  --warn: #B4442F;
+  --warn-soft: #F6DED8;
+  --groceries: #2F7D4F;
+  --household: #3A64A8;
+  --fun: #A2508C;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --text: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1513; --surface: #182120; --sunk: #121A18; --ink: #E7EEEB; --muted: #95A39D; --line: #2A3532;
+    --accent: #6CC7A6; --accent-ink: #0B1612; --accent-soft: #1D3A31; --warn: #EE8B76; --warn-soft: #3E211B;
+    --groceries: #6FC48F; --household: #8BAEEB; --fun: #DA94C7; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1513; --surface: #182120; --sunk: #121A18; --ink: #E7EEEB; --muted: #95A39D; --line: #2A3532;
+  --accent: #6CC7A6; --accent-ink: #0B1612; --accent-soft: #1D3A31; --warn: #EE8B76; --warn-soft: #3E211B;
+  --groceries: #6FC48F; --household: #8BAEEB; --fun: #DA94C7; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body { font-family: var(--text); font-size: 15px; line-height: 1.45; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.toprow { display: flex; align-items: center; gap: 12px; padding-block: 12px 8px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+.brand .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+.brand .iq { color: var(--accent); }
+.homename { color: var(--muted); font-size: 13px; }
+.spacer { flex: 1; }
+.faces { display: flex; }
+.faces img { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--bg); margin-left: -6px; background: var(--sunk); }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs a { text-decoration: none; color: var(--muted); padding: 7px 12px; border-radius: 999px; font-weight: 600; font-size: 14px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+nav.tabs a[aria-current="page"] { background: var(--ink); color: var(--bg); }
+nav.tabs a .count { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 0 6px; }
+nav.tabs a[aria-current="page"] .count { background: var(--accent); color: var(--accent-ink); }
+
+main { padding-block: 18px 80px; display: flex; flex-direction: column; gap: 14px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.1; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+.label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.row > .grow { flex: 1; min-width: 0; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.list > .item { padding: 11px 14px; border-top: 1px solid var(--line); }
+.list > .item:first-child { border-top: 0; }
+button.rowbtn { width: 100%; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; }
+.list > button.rowbtn:first-child { border-top: 0; }
+.initials { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; }
+.initials.lg { width: 36px; height: 36px; font-size: 14px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 600; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn.secondary { background: var(--accent-soft); color: var(--accent); }
+.btn.ghost { background: transparent; color: var(--accent); padding: 8px 10px; }
+.btn.danger { background: transparent; color: var(--warn); border: 1px solid var(--warn); }
+.btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.iconbtn { border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.iconbtn:hover { background: var(--sunk); color: var(--ink); }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--chip, var(--accent)); border-color: var(--chip, var(--accent)); color: #fff; }
+:root[data-theme="dark"] .chip[aria-pressed="true"] { color: #0B1612; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip[aria-pressed="true"] { color: #0B1612; } }
+
+input[type=text], input[type=date], input[type=time], input[type=search], select, textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0;
+}
+textarea { min-height: 90px; resize: vertical; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.fields2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.check { appearance: none; width: 24px; height: 24px; flex: none; border-radius: 50%; border: 2px solid var(--c, var(--line)); background: transparent; display: grid; place-items: center; margin: 0; }
+.check:checked { background: var(--c, var(--accent)); border-color: var(--c, var(--accent)); }
+.check:checked::after { content: ""; width: 10px; height: 6px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateY(-1px) rotate(-45deg); }
+.done-text { text-decoration: line-through; color: var(--muted); }
+.avatar { width: 24px; height: 24px; border-radius: 50%; flex: none; background: var(--sunk); }
+.avatar.lg { width: 36px; height: 36px; }
+.pill { font-size: 12px; border-radius: 999px; padding: 1px 8px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.accent { background: var(--accent-soft); color: var(--accent); }
+.empty { text-align: center; padding: 28px 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.empty strong { color: var(--ink); font-size: 16px; }
+.notice { border-radius: var(--r); padding: 12px 14px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.notice.warn { background: var(--warn-soft); }
+
+/* calendar */
+.month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.month .dow { text-align: center; font-size: 11px; font-weight: 600; color: var(--muted); padding-bottom: 4px; }
+.month button { border: 0; background: transparent; border-radius: 10px; aspect-ratio: 1 / 1; max-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-variant-numeric: tabular-nums; }
+.month button.out { color: var(--muted); opacity: .55; }
+.month button.today { box-shadow: inset 0 0 0 1.5px var(--accent); font-weight: 700; }
+.month button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.dots { display: flex; gap: 2px; height: 5px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.month button[aria-pressed="true"] .dots i { background: var(--bg); }
+.time { width: 74px; flex: none; color: var(--muted); font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+.stripe { width: 4px; align-self: stretch; border-radius: 2px; flex: none; }
+
+/* lists */
+.cat { --chip: var(--groceries); }
+.cat.household { --chip: var(--household); }
+.cat.fun { --chip: var(--fun); }
+.addbar { display: grid; grid-template-columns: 1fr 90px auto; gap: 8px; }
+.qty { color: var(--muted); font-size: 13px; }
+.tray { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 8px; }
+
+/* menu */
+.day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.meal { width: 76px; flex: none; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.ingrow { display: grid; grid-template-columns: 100px 1fr 32px; gap: 8px; align-items: center; }
+
+/* sheet */
+.scrim { position: fixed; inset: 0; background: rgba(8, 14, 12, .45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--bg); width: 100%; max-width: 620px; max-height: 92%; overflow: auto; border-radius: 18px 18px 0 0; padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px; animation: up .18s ease-out; }
+@media (min-width: 700px) { .scrim { align-items: center; } .sheet { border-radius: 18px; } }
+@keyframes up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--warn-soft); padding: 10px 12px; border-radius: 10px; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 60; max-width: calc(100% - 32px); font-size: 14px; }
+.skeleton { height: 64px; border-radius: var(--r); background: var(--sunk); }
+@media (max-width: 420px) { .fields2 { grid-template-columns: 1fr; } .addbar { grid-template-columns: 1fr 70px auto; } h1 { font-size: 26px; } }
+</style>
+
+<div id="app">
+  <header class="top"><div class="wrap"><div class="toprow"><div class="brand"><span class="mark"></span>Home<span class="iq">IQ</span></div></div></div></header>
+  <main class="wrap"><div class="skeleton"></div><div class="skeleton"></div><p class="muted">Loading your home…</p></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const { useState, useEffect, useMemo, useRef } = React;
+const html = htm.bind(React.createElement);
+
+// ---------- constants ----------
+const TABS = [
+  { id: 'today', label: 'Today' },
+  { id: 'calendar', label: 'Calendar' },
+  { id: 'lists', label: 'Lists' },
+  { id: 'menu', label: 'Menu' },
+  { id: 'todos', label: 'To-Do' },
+  { id: 'household', label: 'Household' },
+];
+const CATS = [
+  { key: 'groceries', label: 'Groceries' },
+  { key: 'household', label: 'Household' },
+  { key: 'fun', label: 'Fun' },
+];
+const MEALS = ['breakfast', 'lunch', 'dinner'];
+const REPEATS = [
+  { key: 'none', label: 'Once' }, { key: 'daily', label: 'Daily' }, { key: 'weekly', label: 'Weekly' },
+  { key: 'biweekly', label: 'Every 2 weeks' }, { key: 'monthly', label: 'Monthly' },
+];
+const REMINDERS = [null, 0, 10, 30, 60, 120, 1440, 2880];
+const COLLECTIONS = ['events', 'shopping', 'recipes', 'menu', 'todos', 'members', 'settings'];
+
+// ---------- dates ----------
+const pad = (n) => String(n).padStart(2, '0');
+const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseKey = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const addMonths = (d, n) => {
+  const day = d.getDate();
+  const r = new Date(d.getFullYear(), d.getMonth() + n, 1, d.getHours(), d.getMinutes());
+  r.setDate(Math.min(day, new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate()));
+  return r;
+};
+const startOfWeek = (d) => addDays(startOfDay(d), -d.getDay());
+const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const fmtDay = (d) => d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+const fmtShort = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const timeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+function nextDue(current, repeat, today = new Date()) {
+  if (repeat === 'none') return current;
+  const step = (d) => repeat === 'daily' ? addDays(d, 1) : repeat === 'weekly' ? addDays(d, 7)
+    : repeat === 'biweekly' ? addDays(d, 14) : addMonths(d, 1);
+  let next = step(current ? parseKey(current) : startOfDay(today));
+  const t0 = startOfDay(today);
+  while (next <= t0) next = step(next);
+  return dayKey(next);
+}
+function dueLabel(key) {
+  const diff = Math.round((parseKey(key) - startOfDay(new Date())) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  if (diff < 0) return `${-diff} days overdue`;
+  if (diff < 7) return parseKey(key).toLocaleDateString([], { weekday: 'long' });
+  return fmtShort(parseKey(key));
+}
+function reminderLabel(m) {
+  if (m === null || m === undefined) return 'No reminder';
+  if (m === 0) return 'At start time';
+  if (m < 60) return `${m} min before`;
+  if (m < 1440) return `${m / 60} hr before`;
+  return m === 1440 ? '1 day before' : `${m / 1440} days before`;
+}
+function eventDays(e) {
+  const out = []; let d = startOfDay(new Date(e.start)); const last = startOfDay(new Date(Math.max(e.end || e.start, e.start)));
+  while (d <= last && out.length < 60) { out.push(dayKey(d)); d = addDays(d, 1); }
+  return out;
+}
+/** Google Calendar link: adding it there gives phone notifications through the Google Calendar app. */
+function googleCalLink(e) {
+  const utc = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const dates = e.allDay
+    ? `${dayKey(new Date(e.start)).replace(/-/g, '')}/${dayKey(addDays(new Date(e.end || e.start), 1)).replace(/-/g, '')}`
+    : `${utc(e.start)}/${utc(e.end || e.start + 3600000)}`;
+  const p = new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates, details: e.notes || '' });
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
+// ---------- ingredients ----------
+const UNITS = 'cups?|c|tbsps?|tablespoons?|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|cloves?|cans?|pinch(?:es)?|dash(?:es)?|slices?|packages?|pkgs?|bunch(?:es)?|sticks?|heads?|large|medium|small';
+const ING_LINE = new RegExp(`^\\s*((?:[\\d½¼¾⅓⅔⅛.,/\\- ]+)(?:\\s*(?:${UNITS})\\.?\\b)?)?\\s*(?:of\\s+)?(.+?)\\s*$`, 'i');
+function parseIngredients(text) {
+  return text.split('\n').map((l) => l.replace(/^[\s\-•*·▢☐]+/, '').trim()).filter(Boolean).map((line) => {
+    const m = ING_LINE.exec(line);
+    return m ? { quantity: (m[1] || '').trim(), name: m[2].trim() } : { quantity: '', name: line };
+  });
+}
+const norm = (s) => s.trim().toLowerCase().replace(/s$/, '');
+const combineQty = (a, b) => (a && b ? `${a} + ${b}` : a || b);
+
+// ---------- small components ----------
+function Avatar({ p, lg }) {
+  if (p?.avatarUrl) return html`<img className=${'avatar' + (lg ? ' lg' : '')} src=${p.avatarUrl} alt="" />`;
+  const ini = (p?.name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  return html`<span className=${'initials' + (lg ? ' lg' : '')} style=${{ background: p?.color || 'var(--muted)' }} aria-hidden="true">${ini}</span>`;
+}
+function Chip({ on, onClick, children, color, className }) {
+  return html`<button type="button" className=${'chip ' + (className || '')} aria-pressed=${on ? 'true' : 'false'} onClick=${onClick} style=${color ? { '--chip': color } : null}>${children}</button>`;
+}
+function Empty({ title, children }) {
+  return html`<div className="empty"><strong>${title}</strong><div>${children}</div></div>`;
+}
+function Sheet({ title, onClose, children }) {
+  useEffect(() => {
+    const k = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, [onClose]);
+  return html`<div className="scrim" onMouseDown=${(e) => e.target === e.currentTarget && onClose()}>
+    <div className="sheet" role="dialog" aria-modal="true" aria-label=${title}>
+      <div className="between"><h2>${title}</h2><button className="iconbtn" aria-label="Close" onClick=${onClose}>✕</button></div>
+      ${children}
+    </div></div>`;
+}
+function ConfirmDelete({ label, onConfirm }) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) return html`<button className="btn danger" onClick=${() => setAsking(true)}>${label}</button>`;
+  return html`<div className="confirm"><span className="grow">Delete for everyone in the home?</span>
+    <button className="btn sm ghost" onClick=${() => setAsking(false)}>Keep</button>
+    <button className="btn sm" style=${{ background: 'var(--warn)' }} onClick=${onConfirm}>Delete</button></div>`;
+}
+function Field({ label, children }) { return html`<label className="field"><span>${label}</span>${children}</label>`; }
+
+// ---------- app ----------
+function useHash() {
+  const read = () => { const h = location.hash.slice(1); return TABS.some((t) => t.id === h) ? h : 'today'; };
+  const [tab, setTab] = useState(read);
+  useEffect(() => { const f = () => setTab(read()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
+  return tab;
+}
+
+function App() {
+  const tab = useHash();
+  const [db, setDb] = useState(undefined); // undefined = connecting, null = unavailable
+  const [user, setUser] = useState(null);
+  const [me, setMe] = useState(null);
+  const [canWrite, setCanWrite] = useState(true);
+  const [data, setData] = useState({});
+  const [loaded, setLoaded] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [profiles, setProfiles] = useState({});
+  const [sheet, setSheet] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const say = (msg) => { setToast(msg); clearTimeout(say.t); say.t = setTimeout(() => setToast(null), 3200); };
+
+  // Connect to the shared store and the viewer's identity.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [d, u] = await Promise.all([window.claude?.use?.('db') ?? null, window.claude?.use?.('user') ?? null]);
+      if (!alive) return;
+      setUser(u);
+      if (u) {
+        const m = await u.me(); if (alive) setMe(m);
+        const w = await u.can('data.write'); if (alive && w === false) setCanWrite(false);
+      }
+      setDb(d);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Subscribe once to every shared collection.
+  useEffect(() => {
+    if (!db) return;
+    const timer = setTimeout(() => setSlow(true), 10000);
+    const seen = new Set();
+    const unsubs = COLLECTIONS.map((c) => db.collection(c).onSnapshot((snap) => {
+      setData((prev) => ({ ...prev, [c]: snap.docs.map((x) => ({ id: x.id, ...x.data() })) }));
+      if (!snap.metadata.fromCache) { seen.add(c); if (seen.size === COLLECTIONS.length) { clearTimeout(timer); setSlow(false); } }
+      setLoaded(true);
+    }, (err) => { clearTimeout(timer); setLoaded(true); if (err.code !== 'revoked') say(`Couldn't load ${c}. Reload the page to try again.`); }));
+    return () => { clearTimeout(timer); unsubs.forEach((u) => u()); };
+  }, [db]);
+
+  // Register this person as a member of the home the first time they open it.
+  const members = data.members || [];
+  useEffect(() => {
+    if (!db || !loaded || !me?.id || !canWrite || !data.members) return;
+    if (members.some((m) => m.id === me.id)) return;
+    db.doc(`members/${me.id}`).set({ joinedAt: Date.now() }).catch((e) => { if (e.code === 'invalid_argument') setCanWrite(false); });
+  }, [db, loaded, me, canWrite, data.members]);
+
+  // Resolve names and avatars for everyone the home mentions.
+  const memberIds = members.map((m) => m.id);
+  const idKey = [...new Set([...memberIds, me?.id].filter(Boolean))].sort().join(',');
+  useEffect(() => {
+    if (!user || !idKey) return;
+    let alive = true;
+    user.profiles(idKey.split(',')).then((ps) => alive && setProfiles(ps));
+    return () => { alive = false; };
+  }, [user, idKey]);
+
+  const person = (id) => (id ? profiles[id] : null);
+  const firstName = (id) => ((profiles[id]?.name || '').split(' ')[0] || 'Someone');
+
+  // Write helper: every change goes through here so failures surface the same way.
+  const write = async (fn, okMsg) => {
+    if (!db) return say('Changes can’t be saved in this view.');
+    try { await fn(db); if (okMsg) say(okMsg); return true; }
+    catch (e) {
+      if (e.code === 'invalid_argument' && !canWrite) say('You can view this home but not change it. Ask the owner to share it with you as an Editor.');
+      else if (e.code === 'quota_exceeded') say('Storage is full. Clear checked items or old to-dos, then try again.');
+      else say('That didn’t save. Check your connection and try again.');
+      return false;
+    }
+  };
+
+  const ctx = { db, data, me, members, memberIds, profiles, person, firstName, write, say, setSheet, canWrite };
+
+  const homeName = (data.settings || []).find((s) => s.id === 'home')?.name || 'Our home';
+  const groceriesLeft = (data.shopping || []).filter((s) => !s.checked).length;
+  const openTodos = (data.todos || []).filter((t) => !t.done && t.dueDate && t.dueDate <= dayKey(new Date())).length;
+
+  let body;
+  if (db === undefined) body = html`<div className="skeleton"></div><div className="skeleton"></div>`;
+  else if (db === null) body = html`<div className="notice warn"><strong>Sign in to use HomeIQ.</strong> Your home's calendar, lists and to-dos are saved to your Claude account, so this page needs you signed in to claude.ai.</div>`;
+  else if (!loaded) body = html`<div className="skeleton"></div><div className="skeleton"></div><p className="muted">Loading your home…</p>`;
+  else {
+    const View = { today: Today, calendar: Calendar, lists: Lists, menu: Menu, todos: Todos, household: Household }[tab];
+    body = html`
+      ${slow && html`<div className="notice warn">Can’t reach the server right now. What you see may be out of date.</div>`}
+      ${!canWrite && html`<div className="notice warn">You can see this home but can’t make changes. Ask the owner to share it with you as an <strong>Editor</strong>.</div>`}
+      <${View} ...${ctx} />`;
+  }
+
+  return html`
+    <header className="top"><div className="wrap">
+      <div className="toprow">
+        <div className="brand"><span className="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5 8 2.5l6 5V14H9.5v-4h-3v4H2z" fill="var(--accent-ink)"/></svg></span>Home<span className="iq">IQ</span></div>
+        <span className="homename">${homeName}</span>
+        <span className="spacer"></span>
+        <div className="faces">${memberIds.slice(0, 5).map((id) => html`<span key=${id} title=${profiles[id]?.name || ''} style=${{ marginLeft: -6, border: '2px solid var(--bg)', borderRadius: '50%', display: 'inline-flex' }}><${Avatar} p=${profiles[id]} /></span>`)}</div>
+      </div>
+      <nav className="tabs" aria-label="Sections">
+        ${TABS.map((t) => html`<a key=${t.id} href=${'#' + t.id} aria-current=${tab === t.id ? 'page' : undefined}>${t.label}
+          ${t.id === 'lists' && groceriesLeft > 0 && html`<span className="count num">${groceriesLeft}</span>`}
+          ${t.id === 'todos' && openTodos > 0 && html`<span className="count num">${openTodos}</span>`}</a>`)}
+      </nav>
+    </div></header>
+    <main className="wrap">${body}</main>
+    ${sheet}
+    ${toast && html`<div className="toast" role="status">${toast}</div>`}`;
+}
+
+// ---------- Today ----------
+function Today(ctx) {
+  const { data, me, firstName, profiles, person, setSheet } = ctx;
+  const now = new Date(); const tk = dayKey(now);
+  const events = data.events || [];
+  const upcoming = events.filter((e) => (e.end || e.start) >= startOfDay(now).getTime() && e.start < addDays(startOfDay(now), 7).getTime()).sort((a, b) => a.start - b.start);
+  const todays = upcoming.filter((e) => eventDays(e).includes(tk));
+  const later = upcoming.filter((e) => !eventDays(e).includes(tk));
+  const remindNow = upcoming.filter((e) => e.reminderMinutes != null && !e.allDay && e.start > now && e.start - e.reminderMinutes * 60000 <= now);
+  const meals = (data.menu || []).filter((m) => m.date === tk).sort((a, b) => MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal));
+  const mine = (data.todos || []).filter((t) => !t.done && (t.assigneeId === me?.id || !t.assigneeId) && (!t.dueDate || t.dueDate <= tk))
+    .sort((a, b) => (a.dueDate || '9').localeCompare(b.dueDate || '9'));
+  const counts = CATS.map((c) => ({ ...c, n: (data.shopping || []).filter((s) => s.category === c.key && !s.checked).length }));
+  const greet = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const name = (profiles[me?.id]?.name || '').split(' ')[0];
+
+  return html`
+    <div className="stack" style=${{ gap: 4 }}>
+      <span className="muted">${fmtDay(now)}</span>
+      <h1>${greet}${name ? `, ${name}` : ''}</h1>
+    </div>
+    ${remindNow.map((e) => html`<div key=${e.id} className="notice"><strong>Coming up:</strong> ${e.title} at ${fmtTime(e.start)}</div>`)}
+    <div className="grid2">
+      <section className="card">
+        <div className="between"><span className="label">Today</span><button className="btn ghost sm" onClick=${() => setSheet(html`<${EventSheet} ...${ctx} date=${tk} />`)}>+ Event</button></div>
+        ${todays.length === 0 ? html`<span className="muted">Nothing on the calendar today.</span>` : todays.map((e) => html`
+          <button key=${e.id} className="row" style=${{ border: 0, background: 'none', padding: 0, textAlign: 'left' }} onClick=${() => setSheet(html`<${EventSheet} ...${ctx} event=${e} />`)}>
+            <span className="time">${e.allDay ? 'All day' : fmtTime(e.start)}</span><span className="grow">${e.title}</span>
+          </button>`)}
+        ${later.length > 0 && html`<span className="label" style=${{ marginTop: 6 }}>This week</span>
+          ${later.slice(0, 4).map((e) => html`<div key=${e.id} className="row small"><span className="time">${new Date(e.start).toLocaleDateString([], { weekday: 'short' })}</span><span className="grow">${e.title}</span></div>`)}`}
+      </section>
+      <section className="card">
+        <div className="between"><span className="label">On the menu</span><button className="btn ghost sm" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} date=${tk} />`)}>+ Meal</button></div>
+        ${meals.length === 0 ? html`<span className="muted">No meals planned for today.</span>` : meals.map((m) => html`
+          <div key=${m.id} className="row"><span className="meal">${m.meal}</span><span className="grow">${m.title}</span></div>`)}
+      </section>
+    </div>
+    <section className="card">
+      <div className="between"><span className="label">Your to-dos</span><a className="btn ghost sm" href="#todos">All to-dos</a></div>
+      ${mine.length === 0 ? html`<span className="muted">You're all caught up.</span>` : mine.slice(0, 6).map((t) => html`<${TodoRow} key=${t.id} t=${t} ...${ctx} />`)}
+    </section>
+    <a href="#lists" className="card" style=${{ textDecoration: 'none', color: 'inherit' }}>
+      <span className="label">Shopping</span>
+      <div className="chips">${counts.map((c) => html`<span key=${c.key} className="pill num">${c.label}: ${c.n}</span>`)}</div>
+    </a>`;
+}
+
+// ---------- Calendar ----------
+function Calendar(ctx) {
+  const { data, person, setSheet } = ctx;
+  const [sel, setSel] = useState(startOfDay(new Date()));
+  const [month, setMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const byDay = useMemo(() => {
+    const m = new Map();
+    for (const e of data.events || []) for (const k of eventDays(e)) m.set(k, [...(m.get(k) || []), e]);
+    return m;
+  }, [data.events]);
+  const gridStart = startOfWeek(month);
+  const weeks = Math.ceil((new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() + month.getDay()) / 7);
+  const tk = dayKey(new Date());
+  const dayEvents = (byDay.get(dayKey(sel)) || []).slice().sort((a, b) => (b.allDay - a.allDay) || a.start - b.start);
+
+  return html`
+    <div className="between"><h1>Calendar</h1><button className="btn" onClick=${() => setSheet(html`<${EventSheet} ...${ctx} date=${dayKey(sel)} />`)}>+ New event</button></div>
+    <section className="card">
+      <div className="between">
+        <button className="iconbtn" aria-label="Previous month" onClick=${() => setMonth(addMonths(month, -1))}>‹</button>
+        <h2>${month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h2>
+        <button className="iconbtn" aria-label="Next month" onClick=${() => setMonth(addMonths(month, 1))}>›</button>
+      </div>
+      <div className="month">
+        ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => html`<div key=${'h' + i} className="dow">${d}</div>`)}
+        ${Array.from({ length: weeks * 7 }, (_, i) => {
+          const d = addDays(gridStart, i); const k = dayKey(d); const n = (byDay.get(k) || []).length;
+          const cls = [d.getMonth() !== month.getMonth() && 'out', k === tk && 'today'].filter(Boolean).join(' ');
+          return html`<button key=${k} className=${cls} aria-pressed=${k === dayKey(sel) ? 'true' : 'false'} aria-label=${fmtDay(d) + (n ? `, ${n} events` : '')}
+            onClick=${() => { setSel(d); if (d.getMonth() !== month.getMonth()) setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>
+            <span>${d.getDate()}</span><span className="dots">${Array.from({ length: Math.min(n, 3) }, (_, j) => html`<i key=${j}></i>`)}</span></button>`;
+        })}
+      </div>
+    </section>
+    <span className="label">${fmtDay(sel)}</span>
+    ${dayEvents.length === 0 ? html`<div className="list"><${Empty} title="Nothing planned">Add an event for this day with “New event”.<//></div>` : html`
+      <div className="list">${dayEvents.map((e) => {
+        const p = person(e.createdBy);
+        return html`<button key=${e.id} className="item row rowbtn" onClick=${() => setSheet(html`<${EventSheet} ...${ctx} event=${e} />`)}>
+          <span className="stripe" style=${{ background: p?.color || 'var(--accent)' }}></span>
+          <span className="grow stack" style=${{ gap: 2 }}>
+            <strong>${e.title}</strong>
+            <span className="muted small">${e.allDay ? 'All day' : `${fmtTime(e.start)} – ${fmtTime(e.end)}`}${e.reminderMinutes != null ? ` · ${reminderLabel(e.reminderMinutes)}` : ''}</span>
+          </span>
+          ${p && html`<${Avatar} p=${p} />`}
+        </button>`;
+      })}</div>`}`;
+}
+
+function EventSheet(ctx) {
+  const { event, date, write, setSheet, me, say } = ctx;
+  const base = event ? new Date(event.start) : (() => { const d = parseKey(date || dayKey(new Date())); const n = new Date(); d.setHours(n.getHours() + 1, 0, 0, 0); return d; })();
+  const baseEnd = event ? new Date(event.end) : new Date(base.getTime() + 3600000);
+  const [f, setF] = useState({
+    title: event?.title || '', allDay: !!event?.allDay, notes: event?.notes || '',
+    day: dayKey(base), start: timeStr(base), endDay: dayKey(baseEnd), end: timeStr(baseEnd),
+    reminder: event ? (event.reminderMinutes ?? null) : 30,
+  });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const close = () => setSheet(null);
+
+  const save = async () => {
+    if (!f.title.trim()) return say('Give the event a title.');
+    const at = (day, t) => { const d = parseKey(day); const [h, m] = t.split(':').map(Number); d.setHours(h, m, 0, 0); return d.getTime(); };
+    const start = f.allDay ? parseKey(f.day).getTime() : at(f.day, f.start);
+    const end = f.allDay ? parseKey(f.endDay).getTime() + 86340000 : at(f.endDay, f.end);
+    if (end < start) return say('The event ends before it starts.');
+    const body = { title: f.title.trim(), start, end, allDay: f.allDay, notes: f.notes.trim(), reminderMinutes: f.reminder === '' || f.reminder === null ? null : Number(f.reminder), createdBy: event?.createdBy || me?.id || null };
+    if (await write((db) => event ? db.doc(`events/${event.id}`).set(body) : db.collection('events').add(body), event ? 'Event updated' : 'Event added')) close();
+  };
+
+  return html`<${Sheet} title=${event ? 'Edit event' : 'New event'} onClose=${close}>
+    <${Field} label="Title"><input id="ev-title" type="text" value=${f.title} onChange=${set('title')} placeholder="Dinner with friends" autoFocus /><//>
+    <label className="row"><input id="ev-allday" type="checkbox" checked=${f.allDay} onChange=${set('allDay')} /> All day</label>
+    <div className="fields2">
+      <${Field} label="Starts"><input id="ev-day" type="date" value=${f.day} onChange=${(e) => setF({ ...f, day: e.target.value, endDay: e.target.value > f.endDay ? e.target.value : f.endDay })} /><//>
+      ${!f.allDay && html`<${Field} label="Start time"><input id="ev-start" type="time" value=${f.start} onChange=${set('start')} /><//>`}
+      <${Field} label="Ends"><input id="ev-endday" type="date" value=${f.endDay} onChange=${set('endDay')} /><//>
+      ${!f.allDay && html`<${Field} label="End time"><input id="ev-end" type="time" value=${f.end} onChange=${set('end')} /><//>`}
+    </div>
+    <${Field} label="Reminder"><select id="ev-reminder" value=${f.reminder === null ? '' : String(f.reminder)} onChange=${(e) => setF({ ...f, reminder: e.target.value === '' ? null : Number(e.target.value) })}>
+      ${REMINDERS.map((m) => html`<option key=${String(m)} value=${m === null ? '' : String(m)}>${reminderLabel(m)}</option>`)}
+    </select><//>
+    <${Field} label="Notes"><textarea id="ev-notes" value=${f.notes} onChange=${set('notes')} placeholder="Address, what to bring…"></textarea><//>
+    <button className="btn" onClick=${save}>${event ? 'Save changes' : 'Add event'}</button>
+    ${event && html`
+      <div className="notice small">Want a phone alert? <a href=${googleCalLink(event)} target="_blank" rel="noopener">Add it to Google Calendar</a> and its app will notify you. HomeIQ also shows a “Coming up” note on the Today page when the reminder time arrives.</div>
+      <${ConfirmDelete} label="Delete event" onConfirm=${async () => { if (await write((db) => db.doc(`events/${event.id}`).delete(), 'Event deleted')) close(); }} />`}
+  <//>`;
+}
+
+// ---------- Lists ----------
+function Lists(ctx) {
+  const { data, write, person, me } = ctx;
+  const [cat, setCat] = useState(() => { try { return localStorage.getItem('homeiq-cat') || 'groceries'; } catch { return 'groceries'; } });
+  const [name, setName] = useState(''); const [qty, setQty] = useState('');
+  const [openId, setOpenId] = useState(null);
+  useEffect(() => { try { localStorage.setItem('homeiq-cat', cat); } catch {} }, [cat]);
+  const items = (data.shopping || []).filter((s) => s.category === cat).sort((a, b) => a.createdAt - b.createdAt);
+  const open = items.filter((i) => !i.checked); const done = items.filter((i) => i.checked);
+
+  const add = async (e) => {
+    e.preventDefault(); if (!name.trim()) return;
+    const body = { name: name.trim(), quantity: qty.trim(), category: cat, checked: false, addedBy: me?.id || null, recipeName: null, createdAt: Date.now() };
+    setName(''); setQty('');
+    await write((db) => db.collection('shopping').add(body));
+  };
+  const toggle = (i) => write((db) => db.doc(`shopping/${i.id}`).update({ checked: !i.checked }));
+  const clear = () => write(async (db) => { for (const i of done) await db.doc(`shopping/${i.id}`).delete(); }, `Cleared ${done.length} items`);
+
+  const Item = ({ i }) => {
+    const p = person(i.addedBy);
+    return html`<div className="item">
+      <div className="row">
+        <input type="checkbox" className="check" style=${{ '--c': `var(--${i.category})` }} checked=${!!i.checked} onChange=${() => toggle(i)} aria-label=${'Got ' + i.name} />
+        <button className="grow" style=${{ border: 0, background: 'none', textAlign: 'left', padding: 0 }} onClick=${() => setOpenId(openId === i.id ? null : i.id)}>
+          <span className=${i.checked ? 'done-text' : ''}>${i.name}</span>${i.quantity && html` <span className="qty">· ${i.quantity}</span>`}
+          ${i.recipeName && !i.checked && html`<div className="muted small">for ${i.recipeName}</div>`}
+        </button>
+        ${p && html`<${Avatar} p=${p} />`}
+      </div>
+      ${openId === i.id && html`<div className="tray">
+        ${CATS.filter((c) => c.key !== i.category).map((c) => html`<button key=${c.key} className="btn sm secondary" onClick=${() => write((db) => db.doc(`shopping/${i.id}`).update({ category: c.key }), `Moved to ${c.label}`)}>Move to ${c.label}</button>`)}
+        <button className="btn sm danger" onClick=${() => write((db) => db.doc(`shopping/${i.id}`).delete())}>Remove</button>
+      </div>`}
+    </div>`;
+  };
+
+  return html`
+    <h1>Lists</h1>
+    <div className="chips">${CATS.map((c) => {
+      const n = (data.shopping || []).filter((s) => s.category === c.key && !s.checked).length;
+      return html`<${Chip} key=${c.key} className=${'cat ' + c.key} on=${cat === c.key} onClick=${() => setCat(c.key)}>${c.label}${n ? html` <span className="num">${n}</span>` : ''}<//>`;
+    })}</div>
+    <form className="addbar" onSubmit=${add}>
+      <input id="list-name" type="text" value=${name} onChange=${(e) => setName(e.target.value)} placeholder=${`Add to ${CATS.find((c) => c.key === cat).label.toLowerCase()}…`} aria-label="Item" />
+      <input id="list-qty" type="text" value=${qty} onChange=${(e) => setQty(e.target.value)} placeholder="Qty" aria-label="Quantity" />
+      <button className="btn" type="submit">Add</button>
+    </form>
+    ${items.length === 0 ? html`<div className="list"><${Empty} title="This list is empty">${cat === 'groceries' ? 'Add items above, or put a recipe on the menu to fill it automatically.' : 'Add the first item above.'}<//></div>` : html`
+      ${open.length > 0 && html`<div className="list">${open.map((i) => html`<${Item} key=${i.id} i=${i} />`)}</div>`}
+      ${done.length > 0 && html`
+        <div className="between"><span className="label">In the cart · ${done.length}</span><button className="btn ghost sm" onClick=${clear}>Clear checked</button></div>
+        <div className="list">${done.map((i) => html`<${Item} key=${i.id} i=${i} />`)}</div>`}`}`;
+}
+
+/** Put a recipe's ingredients on Groceries, merging with unchecked items already there. */
+async function addToGroceries(db, recipe, shopping, uid) {
+  const existing = new Map((shopping || []).filter((s) => s.category === 'groceries' && !s.checked).map((s) => [norm(s.name), { ...s }]));
+  const touched = new Set(); const additions = new Map();
+  for (const ing of recipe.ingredients || []) {
+    if (!ing.name?.trim()) continue;
+    const k = norm(ing.name); const q = (ing.quantity || '').trim();
+    if (existing.has(k)) { const s = existing.get(k); s.quantity = combineQty(s.quantity || '', q); touched.add(k); }
+    else if (additions.has(k)) additions.get(k).quantity = combineQty(additions.get(k).quantity, q);
+    else additions.set(k, { name: ing.name.trim(), quantity: q });
+  }
+  for (const k of touched) { const s = existing.get(k); await db.doc(`shopping/${s.id}`).update({ quantity: s.quantity }); }
+  let n = 0;
+  for (const a of additions.values()) {
+    await db.collection('shopping').add({ ...a, category: 'groceries', checked: false, addedBy: uid || null, recipeName: recipe.name, createdAt: Date.now() + n++ });
+  }
+  return touched.size + additions.size;
+}
+
+// ---------- Menu ----------
+function Menu(ctx) {
+  const { data, write, setSheet, say, me } = ctx;
+  const [view, setView] = useState('plan');
+  const [week, setWeek] = useState(startOfWeek(new Date()));
+  const recipes = (data.recipes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+  const keys = days.map(dayKey);
+  const entries = (data.menu || []).filter((m) => keys.includes(m.date));
+  const tk = dayKey(new Date());
+
+  const shopWeek = () => {
+    const planned = entries.map((m) => recipes.find((r) => r.id === m.recipeId)).filter(Boolean);
+    if (planned.length === 0) return say('No saved recipes on the menu this week.');
+    // One combined pass, so an ingredient shared by two recipes becomes one line.
+    const combined = { name: "this week's menu", ingredients: planned.flatMap((r) => r.ingredients || []) };
+    write(async (db) => {
+      const n = await addToGroceries(db, combined, data.shopping, me?.id);
+      say(`${n} ingredients from ${planned.length} meals added to Groceries`);
+    });
+  };
+
+  return html`
+    <div className="between"><h1>Menu</h1>
+      ${view === 'plan' ? html`<button className="btn" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} />`)}>+ Add meal</button>`
+        : html`<button className="btn" onClick=${() => setSheet(html`<${RecipeEditSheet} ...${ctx} />`)}>+ New recipe</button>`}</div>
+    <div className="chips">
+      <${Chip} on=${view === 'plan'} onClick=${() => setView('plan')}>Weekly plan<//>
+      <${Chip} on=${view === 'recipes'} onClick=${() => setView('recipes')}>Recipes · <span className="num">${recipes.length}</span><//>
+    </div>
+    ${view === 'plan' ? html`
+      <div className="between">
+        <button className="iconbtn" aria-label="Previous week" onClick=${() => setWeek(addDays(week, -7))}>‹</button>
+        <strong>${week.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${addDays(week, 6).toLocaleDateString([], { month: 'short', day: 'numeric' })}</strong>
+        <button className="iconbtn" aria-label="Next week" onClick=${() => setWeek(addDays(week, 7))}>›</button>
+      </div>
+      ${days.map((d) => {
+        const k = dayKey(d);
+        const list = entries.filter((m) => m.date === k).sort((a, b) => MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal));
+        return html`<section key=${k} className=${'card day' + (k === tk ? ' today' : '')}>
+          <div className="between"><strong>${d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</strong>
+            <button className="btn ghost sm" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} date=${k} />`)}>+ Add</button></div>
+          ${list.length === 0 ? html`<span className="muted small">Nothing planned</span>` : list.map((m) => html`
+            <div key=${m.id} className="row">
+              <span className="meal">${m.meal}</span>
+              ${m.recipeId && recipes.some((r) => r.id === m.recipeId)
+                ? html`<button className="grow" style=${{ border: 0, background: 'none', padding: 0, textAlign: 'left', color: 'var(--accent)', fontWeight: 600 }} onClick=${() => setSheet(html`<${RecipeSheet} ...${ctx} id=${m.recipeId} />`)}>${m.title}</button>`
+                : html`<span className="grow">${m.title}</span>`}
+              <button className="iconbtn" aria-label=${'Remove ' + m.title} onClick=${() => write((db) => db.doc(`menu/${m.id}`).delete(), 'Removed from menu')}>✕</button>
+            </div>`)}
+        </section>`;
+      })}
+      <button className="btn secondary" onClick=${shopWeek}>Add this week's ingredients to Groceries</button>`
+    : recipes.length === 0 ? html`<div className="list"><${Empty} title="No recipes yet">Save your go-to meals. Putting one on the menu adds its ingredients to Groceries.<//></div>`
+    : html`<div className="list">${recipes.map((r) => html`
+        <button key=${r.id} className="item row rowbtn" onClick=${() => setSheet(html`<${RecipeSheet} ...${ctx} id=${r.id} />`)}>
+          <span className="grow"><strong>${r.name}</strong><div className="muted small">${(r.ingredients || []).length} ingredients${r.servings ? ` · serves ${r.servings}` : ''}</div></span><span className="muted">›</span>
+        </button>`)}</div>`}`;
+}
+
+function MenuAddSheet(ctx) {
+  const { data, write, setSheet, say, me, date, recipeId } = ctx;
+  const recipes = (data.recipes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const [f, setF] = useState({ date: date || dayKey(new Date()), meal: 'dinner', recipeId: recipeId || null, title: '', groceries: true });
+  const recipe = recipes.find((r) => r.id === f.recipeId);
+  const close = () => setSheet(null);
+  const save = async () => {
+    if (!recipe && !f.title.trim()) return say('Pick a recipe or type what you’re having.');
+    const ok = await write(async (db) => {
+      await db.collection('menu').add({ date: f.date, meal: f.meal, title: recipe ? recipe.name : f.title.trim(), recipeId: recipe?.id || null });
+      if (recipe && f.groceries) { const n = await addToGroceries(db, recipe, data.shopping, me?.id); say(`Added to menu, and ${n} ingredients to Groceries`); }
+      else say('Added to menu');
+    });
+    if (ok) close();
+  };
+  return html`<${Sheet} title="Add to menu" onClose=${close}>
+    <${Field} label="Day"><input id="ma-date" type="date" value=${f.date} onChange=${(e) => setF({ ...f, date: e.target.value })} /><//>
+    <div className="chips">${MEALS.map((m) => html`<${Chip} key=${m} on=${f.meal === m} onClick=${() => setF({ ...f, meal: m })}>${m[0].toUpperCase() + m.slice(1)}<//>`)}</div>
+    <span className="label">From your recipes</span>
+    ${recipes.length === 0 ? html`<span className="muted small">No saved recipes yet. Type a meal below, or save recipes under Menu → Recipes.</span>`
+      : html`<div className="chips">${recipes.map((r) => html`<${Chip} key=${r.id} on=${f.recipeId === r.id} onClick=${() => setF({ ...f, recipeId: f.recipeId === r.id ? null : r.id })}>${r.name}<//>`)}</div>`}
+    ${!recipe && html`<${Field} label="Or something quick"><input id="ma-title" type="text" value=${f.title} onChange=${(e) => setF({ ...f, title: e.target.value })} placeholder="Leftovers, takeout, tacos…" /><//>`}
+    ${recipe && html`<label className="row card"><input id="ma-groc" type="checkbox" checked=${f.groceries} onChange=${(e) => setF({ ...f, groceries: e.target.checked })} />
+      <span className="grow">Add its ${(recipe.ingredients || []).length} ingredients to Groceries</span></label>`}
+    <button className="btn" onClick=${save}>Add to menu</button>
+  <//>`;
+}
+
+function RecipeSheet(ctx) {
+  const { data, write, setSheet, say, me, id } = ctx;
+  const r = (data.recipes || []).find((x) => x.id === id);
+  const close = () => setSheet(null);
+  if (!r) return html`<${Sheet} title="Recipe" onClose=${close}><span className="muted">This recipe was deleted.</span><//>`;
+  return html`<${Sheet} title=${r.name} onClose=${close}>
+    ${(r.servings || r.sourceUrl) && html`<div className="muted small">${r.servings ? `Serves ${r.servings}` : ''}${r.servings && r.sourceUrl ? ' · ' : ''}${r.sourceUrl && html`<a href=${r.sourceUrl} target="_blank" rel="noopener">Original recipe</a>`}</div>`}
+    <div className="fields2">
+      <button className="btn" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} recipeId=${r.id} />`)}>Add to menu</button>
+      <button className="btn secondary" onClick=${() => write(async (db) => { const n = await addToGroceries(db, r, data.shopping, me?.id); say(`${n} ingredients added to Groceries`); })}>Add to Groceries</button>
+    </div>
+    <span className="label">Ingredients</span>
+    <div className="list">${(r.ingredients || []).length === 0 ? html`<div className="item muted">No ingredients listed.</div>` : r.ingredients.map((g, i) => html`
+      <div key=${i} className="item between"><span>${g.name}</span><span className="muted">${g.quantity}</span></div>`)}</div>
+    ${r.instructions && html`<span className="label">Instructions</span><div className="card" style=${{ whiteSpace: 'pre-wrap' }}>${r.instructions}</div>`}
+    <button className="btn ghost" onClick=${() => setSheet(html`<${RecipeEditSheet} ...${ctx} recipe=${r} />`)}>Edit recipe</button>
+    <${ConfirmDelete} label="Delete recipe" onConfirm=${async () => { if (await write((db) => db.doc(`recipes/${r.id}`).delete(), 'Recipe deleted')) close(); }} />
+  <//>`;
+}
+
+function RecipeEditSheet(ctx) {
+  const { write, setSheet, say, me, recipe } = ctx;
+  const [f, setF] = useState({ name: recipe?.name || '', servings: recipe?.servings || '', sourceUrl: recipe?.sourceUrl || '', instructions: recipe?.instructions || '' });
+  const [ings, setIngs] = useState(recipe?.ingredients?.length ? recipe.ingredients : [{ name: '', quantity: '' }]);
+  const [paste, setPaste] = useState(null);
+  const close = () => setSheet(null);
+  const setIng = (i, patch) => setIngs(ings.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+  const save = async () => {
+    if (!f.name.trim()) return say('Give the recipe a name.');
+    const body = { name: f.name.trim(), servings: f.servings.trim(), sourceUrl: f.sourceUrl.trim(), instructions: f.instructions.trim(),
+      ingredients: ings.filter((g) => g.name.trim()).map((g) => ({ name: g.name.trim(), quantity: (g.quantity || '').trim() })), createdBy: recipe?.createdBy || me?.id || null };
+    let newId = recipe?.id;
+    const ok = await write(async (db) => { if (recipe) await db.doc(`recipes/${recipe.id}`).set(body); else newId = (await db.collection('recipes').add(body)).id; }, 'Recipe saved');
+    if (ok) setSheet(html`<${RecipeSheet} ...${ctx} id=${newId} />`);
+  };
+  return html`<${Sheet} title=${recipe ? 'Edit recipe' : 'New recipe'} onClose=${close}>
+    <${Field} label="Name"><input id="rc-name" type="text" value=${f.name} onChange=${(e) => setF({ ...f, name: e.target.value })} placeholder="Sheet-pan chicken" /><//>
+    <div className="fields2">
+      <${Field} label="Serves"><input id="rc-serves" type="text" value=${f.servings} onChange=${(e) => setF({ ...f, servings: e.target.value })} placeholder="4" /><//>
+      <${Field} label="Link (optional)"><input id="rc-url" type="text" value=${f.sourceUrl} onChange=${(e) => setF({ ...f, sourceUrl: e.target.value })} placeholder="https://…" /><//>
+    </div>
+    <div className="between"><span className="label">Ingredients</span>${paste === null && html`<button className="btn ghost sm" onClick=${() => setPaste('')}>Paste a list</button>`}</div>
+    ${paste !== null && html`<div className="stack">
+      <textarea id="rc-paste" value=${paste} onChange=${(e) => setPaste(e.target.value)} placeholder=${'One per line, e.g.\n2 cups rice\n1 lb chicken thighs\n3 cloves garlic'}></textarea>
+      <div className="row"><button className="btn ghost sm" onClick=${() => setPaste(null)}>Cancel</button>
+        <button className="btn sm" onClick=${() => { setIngs([...ings.filter((g) => g.name.trim()), ...parseIngredients(paste)]); setPaste(null); }}>Add these lines</button></div>
+    </div>`}
+    ${ings.map((g, i) => html`<div key=${i} className="ingrow">
+      <input type="text" value=${g.quantity} onChange=${(e) => setIng(i, { quantity: e.target.value })} placeholder="Qty" aria-label="Quantity" />
+      <input type="text" value=${g.name} onChange=${(e) => setIng(i, { name: e.target.value })} placeholder="Ingredient" aria-label="Ingredient" />
+      <button className="iconbtn" aria-label="Remove ingredient" onClick=${() => setIngs(ings.filter((_, j) => j !== i))}>✕</button>
+    </div>`)}
+    <button className="btn sm secondary" onClick=${() => setIngs([...ings, { name: '', quantity: '' }])}>+ Ingredient</button>
+    <${Field} label="Instructions"><textarea id="rc-steps" value=${f.instructions} onChange=${(e) => setF({ ...f, instructions: e.target.value })} placeholder="Steps, oven temperature, notes…"></textarea><//>
+    <button className="btn" onClick=${save}>Save recipe</button>
+  <//>`;
+}
+
+// ---------- To-dos ----------
+function TodoRow(ctx) {
+  const { t, person, write, setSheet, me } = ctx;
+  const p = person(t.assigneeId); const tk = dayKey(new Date());
+  const toggle = () => {
+    if (!t.done && t.recurrence && t.recurrence !== 'none') {
+      const next = nextDue(t.dueDate, t.recurrence);
+      return write((db) => db.doc(`todos/${t.id}`).update({ dueDate: next, completedAt: Date.now(), completedBy: me?.id || null }), `Done. Next due ${dueLabel(next).toLowerCase()}`);
+    }
+    return write((db) => db.doc(`todos/${t.id}`).update({ done: !t.done, completedAt: t.done ? null : Date.now(), completedBy: t.done ? null : (me?.id || null) }));
+  };
+  return html`<div className="row">
+    <input type="checkbox" className="check" style=${{ '--c': p?.color || 'var(--accent)' }} checked=${!!t.done} onChange=${toggle} aria-label=${'Done: ' + t.title} />
+    <button className="grow" style=${{ border: 0, background: 'none', padding: '4px 0', textAlign: 'left' }} onClick=${() => setSheet(html`<${TodoSheet} ...${ctx} todo=${t} />`)}>
+      <span className=${t.done ? 'done-text' : ''}>${t.title}</span>
+      <span className="chips" style=${{ marginTop: 2 }}>
+        ${t.dueDate && !t.done && html`<span className=${'pill' + (t.dueDate < tk ? ' warn' : '')}>${dueLabel(t.dueDate)}</span>`}
+        ${t.recurrence && t.recurrence !== 'none' && html`<span className="pill accent">↻ ${REPEATS.find((r) => r.key === t.recurrence)?.label}</span>`}
+      </span>
+    </button>
+    ${p ? html`<${Avatar} p=${p} />` : html`<span className="muted small">Anyone</span>`}
+  </div>`;
+}
+
+function Todos(ctx) {
+  const { data, me, memberIds, firstName, profiles, setSheet } = ctx;
+  const [filter, setFilter] = useState('all');
+  const [showDone, setShowDone] = useState(false);
+  const tk = dayKey(new Date());
+  const match = (t) => filter === 'all' || (filter === 'anyone' ? !t.assigneeId : t.assigneeId === filter);
+  const vis = (data.todos || []).filter(match);
+  const open = vis.filter((t) => !t.done).sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || a.createdAt - b.createdAt);
+  const groups = [
+    ['Overdue', open.filter((t) => t.dueDate && t.dueDate < tk)],
+    ['Today', open.filter((t) => t.dueDate === tk)],
+    ['Upcoming', open.filter((t) => t.dueDate && t.dueDate > tk)],
+    ['Anytime', open.filter((t) => !t.dueDate)],
+  ].filter(([, l]) => l.length);
+  const done = vis.filter((t) => t.done).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+
+  return html`
+    <div className="between"><h1>To-Do</h1><button className="btn" onClick=${() => setSheet(html`<${TodoSheet} ...${ctx} />`)}>+ New to-do</button></div>
+    <div className="chips">
+      <${Chip} on=${filter === 'all'} onClick=${() => setFilter('all')}>Everyone<//>
+      ${memberIds.map((id) => html`<${Chip} key=${id} on=${filter === id} color=${profiles[id]?.color} onClick=${() => setFilter(id)}>${id === me?.id ? 'Mine' : firstName(id)}<//>`)}
+      <${Chip} on=${filter === 'anyone'} onClick=${() => setFilter('anyone')}>Unassigned<//>
+    </div>
+    ${open.length === 0 && html`<div className="list"><${Empty} title="Nothing to do">Add a task with “New to-do”. Set it to repeat for chores like trash day.<//></div>`}
+    ${groups.map(([title, list]) => html`<section key=${title} className="stack" style=${{ gap: 6 }}>
+      <span className="label">${title} · <span className="num">${list.length}</span></span>
+      <div className="list">${list.map((t) => html`<div key=${t.id} className="item"><${TodoRow} ...${ctx} t=${t} /></div>`)}</div>
+    </section>`)}
+    ${done.length > 0 && html`
+      <button className="btn ghost" style=${{ alignSelf: 'flex-start' }} onClick=${() => setShowDone(!showDone)}>${showDone ? 'Hide' : 'Show'} completed (${done.length})</button>
+      ${showDone && html`<div className="list">${done.slice(0, 40).map((t) => html`<div key=${t.id} className="item"><${TodoRow} ...${ctx} t=${t} /></div>`)}</div>`}`}`;
+}
+
+function TodoSheet(ctx) {
+  const { todo, write, setSheet, say, me, memberIds, profiles, firstName, person } = ctx;
+  const [f, setF] = useState({
+    title: todo?.title || '', notes: todo?.notes || '', assigneeId: todo?.assigneeId ?? null,
+    hasDue: !!todo?.dueDate, due: todo?.dueDate || dayKey(new Date()), recurrence: todo?.recurrence || 'none',
+  });
+  const close = () => setSheet(null);
+  const save = async () => {
+    if (!f.title.trim()) return say('What needs doing?');
+    const hasDue = f.hasDue || f.recurrence !== 'none';
+    const body = { title: f.title.trim(), notes: f.notes.trim(), assigneeId: f.assigneeId, dueDate: hasDue ? f.due : null, recurrence: f.recurrence };
+    const ok = await write((db) => todo ? db.doc(`todos/${todo.id}`).update(body)
+      : db.collection('todos').add({ ...body, done: false, completedAt: null, completedBy: null, createdBy: me?.id || null, createdAt: Date.now() }), todo ? 'To-do updated' : 'To-do added');
+    if (ok) close();
+  };
+  const by = todo?.completedBy && person(todo.completedBy);
+  return html`<${Sheet} title=${todo ? 'Edit to-do' : 'New to-do'} onClose=${close}>
+    <${Field} label="Task"><input id="td-title" type="text" value=${f.title} onChange=${(e) => setF({ ...f, title: e.target.value })} placeholder="Take out the recycling" /><//>
+    <span className="label">Assign to</span>
+    <div className="chips">
+      <${Chip} on=${f.assigneeId === null} onClick=${() => setF({ ...f, assigneeId: null })}>Anyone<//>
+      ${memberIds.map((id) => html`<${Chip} key=${id} on=${f.assigneeId === id} color=${profiles[id]?.color} onClick=${() => setF({ ...f, assigneeId: id })}>${firstName(id)}${id === me?.id ? ' (me)' : ''}<//>`)}
+    </div>
+    <span className="label">Repeat</span>
+    <div className="chips">${REPEATS.map((r) => html`<${Chip} key=${r.key} on=${f.recurrence === r.key} onClick=${() => setF({ ...f, recurrence: r.key, hasDue: r.key !== 'none' ? true : f.hasDue })}>${r.label}<//>`)}</div>
+    <label className="row"><input id="td-hasdue" type="checkbox" checked=${f.hasDue || f.recurrence !== 'none'} disabled=${f.recurrence !== 'none'} onChange=${(e) => setF({ ...f, hasDue: e.target.checked })} /> Has a due date</label>
+    ${(f.hasDue || f.recurrence !== 'none') && html`<${Field} label=${f.recurrence === 'none' ? 'Due' : 'Next due'}><input id="td-due" type="date" value=${f.due} onChange=${(e) => setF({ ...f, due: e.target.value })} /><//>`}
+    ${f.recurrence !== 'none' && html`<span className="muted small">Checking it off moves it to the next due date automatically.</span>`}
+    <${Field} label="Notes"><textarea id="td-notes" value=${f.notes} onChange=${(e) => setF({ ...f, notes: e.target.value })} placeholder="Details…"></textarea><//>
+    ${by && html`<div className="row small muted"><${Avatar} p=${by} /> Last done by ${firstName(todo.completedBy)} on ${fmtShort(new Date(todo.completedAt))}</div>`}
+    <button className="btn" onClick=${save}>${todo ? 'Save changes' : 'Add to-do'}</button>
+    ${todo && html`<${ConfirmDelete} label="Delete to-do" onConfirm=${async () => { if (await write((db) => db.doc(`todos/${todo.id}`).delete(), 'To-do deleted')) close(); }} />`}
+  <//>`;
+}
+
+// ---------- Household ----------
+function Household(ctx) {
+  const { data, write, memberIds, profiles, me, canWrite } = ctx;
+  const current = (data.settings || []).find((s) => s.id === 'home')?.name || '';
+  const [name, setName] = useState(current);
+  useEffect(() => setName(current), [current]);
+  const saveName = (e) => { e.preventDefault(); if (name.trim() && name.trim() !== current) write((db) => db.doc('settings/home').set({ name: name.trim() }), 'Home name saved'); };
+  return html`
+    <h1>Household</h1>
+    <section className="card">
+      <span className="label">Who's in this home</span>
+      ${memberIds.length === 0 ? html`<span className="muted">No one yet.</span>` : memberIds.map((id) => html`
+        <div key=${id} className="row"><${Avatar} p=${profiles[id]} lg /><span className="grow"><strong>${profiles[id]?.name || 'Someone'}</strong>${id === me?.id ? html` <span className="muted">(you)</span>` : ''}</span></div>`)}
+    </section>
+    <section className="card">
+      <span className="label">Add someone</span>
+      <ol style=${{ margin: 0, paddingLeft: 20 }} className="stack">
+        <li>Click <strong>Share</strong> at the top of this page in Claude.</li>
+        <li>Add their email and give them <strong>Editor</strong> access, so they can make changes too.</li>
+        <li>They open the link and sign in to Claude. They show up here the first time they visit.</li>
+      </ol>
+    </section>
+    <form className="card" onSubmit=${saveName}>
+      <span className="label">Home name</span>
+      <div className="row"><input id="home-name" type="text" className="grow" value=${name} onChange=${(e) => setName(e.target.value)} placeholder="Chazel Home" disabled=${!canWrite} />
+        <button className="btn" type="submit" disabled=${!canWrite}>Save</button></div>
+    </form>
+    <section className="card">
+      <span className="label">Reminders</span>
+      <span>Events show a “Coming up” note on the Today page when their reminder time arrives. For alerts on your phone, open an event and use <strong>Add it to Google Calendar</strong>; the Google Calendar app sends the notification.</span>
+    </section>`;
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(html`<${App} />`);
+</script>

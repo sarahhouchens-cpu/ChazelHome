@@ -1,4 +1,6 @@
-# Chazel Home
+# HomeIQ
+
+**The web version lives at `web/homeiq.html`** and is published as a claude.ai page: https://claude.ai/artifact/18huTwwcpmg1pfu2E6jucg. It needs no setup; sign-in and shared data are handled by claude.ai. Everything below describes the earlier iPhone (Expo + Firebase) version, kept for reference.
 
 A shared household app for two (or more): one calendar, one set of shopping lists, one menu, one to-do list. Each person has their own login; everyone in the same "home" sees and edits the same data in real time.
 
