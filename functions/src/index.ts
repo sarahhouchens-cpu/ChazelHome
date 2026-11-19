@@ -5,6 +5,7 @@
  *    (events carry `remindAt`, computed by the website when the event is saved).
  *  - notifyNewEvent: tells the other people in the home when someone adds an event.
  *  - notifyTodoAssigned: tells a person when someone else assigns them a to-do.
+ *  - notifyPickupAssigned: tells a person when someone asks them to pick up a list item.
  *
  * Each device that turned on notifications stores a token in users/<uid>.webPushTokens.
  */
@@ -86,10 +87,12 @@ export const sendEventReminders = onSchedule({ schedule: 'every 1 minutes', time
     if (!homeId || now - (e.remindAt as number) > STALE_MS) continue;
     const home = await db.doc(`homes/${homeId}`).get();
     const members = (home.get('memberIds') as string[] | undefined) ?? [];
+    // Remind the people going; events without attendees are for everyone.
+    const going = ((e.attendeeIds as string[] | undefined) ?? []).filter((id) => members.includes(id));
     const body = e.allDay
       ? `${reminderText(e.reminderMinutes as number)} · all day`
       : `${reminderText(e.reminderMinutes as number)} · ${whenText(e.start as number, false, e.tz as string | undefined)}`;
-    await send(members, { title: e.title as string, body, path: '#calendar' });
+    await send(going.length ? going : members, { title: e.title as string, body, path: '#calendar' });
   }
 });
 
@@ -98,8 +101,14 @@ export const notifyNewEvent = onDocumentCreated('homes/{homeId}/events/{eventId}
   if (!e) return;
   const home = await db.doc(`homes/${event.params.homeId}`).get();
   const others = ((home.get('memberIds') as string[] | undefined) ?? []).filter((id) => id !== e.createdBy);
-  await send(others, {
-    title: `${await firstName(e.createdBy)} added an event`,
+  const going = (e.attendeeIds as string[] | undefined) ?? [];
+  const who = await firstName(e.createdBy);
+  // Everyone hears about it; the people going are told it includes them.
+  const withYou = others.filter((id) => going.includes(id));
+  const fyi = others.filter((id) => !going.includes(id));
+  if (withYou.length) await send(withYou, { title: `${who} added an event with you`, body: `${e.title} · ${whenText(e.start, Boolean(e.allDay), e.tz)}`, path: '#calendar' });
+  if (fyi.length) await send(fyi, {
+    title: `${who} added an event`,
     body: `${e.title} · ${whenText(e.start, Boolean(e.allDay), e.tz)}`,
     path: '#calendar',
   });
@@ -113,4 +122,15 @@ export const notifyTodoAssigned = onDocumentWritten('homes/{homeId}/todos/{todoI
   const actor = (after.updatedBy ?? after.createdBy) as string | undefined;
   if (!assignee || assignee === actor || before?.assigneeId === assignee) return;
   await send([assignee], { title: `${await firstName(actor)} assigned you a to-do`, body: after.title as string, path: '#todos' });
+});
+
+export const notifyPickupAssigned = onDocumentWritten('homes/{homeId}/shopping/{itemId}', async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after || after.checked) return;
+  const assignee = after.assigneeId as string | null;
+  const actor = after.assignedBy as string | undefined;
+  if (!assignee || assignee === actor || before?.assigneeId === assignee) return;
+  const qty = after.quantity ? ` (${after.quantity})` : '';
+  await send([assignee], { title: `${await firstName(actor)} asked you to pick up`, body: `${after.name}${qty}`, path: '#today' });
 });

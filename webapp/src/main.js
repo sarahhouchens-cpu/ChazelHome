@@ -4,7 +4,7 @@ import htm from 'htm';
 import * as api from './backend.js';
 import {
   CATS, MEALS, REMINDERS, REPEATS, addDays, addMonths, dayKey, dueLabel, eventDays, fmtDay, fmtShort, fmtTime,
-  googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, remindAtFor, startOfDay, startOfWeek, timeStr,
+  googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, reminderLabel, remindAtFor, leftoverOptions, eventPeople, startOfDay, startOfWeek, timeStr,
 } from './logic.js';
 
 const html = htm.bind(React.createElement);
@@ -24,6 +24,10 @@ function Avatar({ p, lg }) {
   if (p?.avatarUrl) return html`<img className=${'avatar' + (lg ? ' lg' : '')} src=${p.avatarUrl} alt="" />`;
   const ini = (p?.name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return html`<span className=${'initials' + (lg ? ' lg' : '')} style=${{ background: p?.color || 'var(--muted)' }} aria-hidden="true">${ini}</span>`;
+}
+function People({ ids, profiles, all }) {
+  if (all) return html`<span className="pill">Everyone</span>`;
+  return html`<span className="people">${ids.map((id) => html`<span key=${id} className="face" title=${profiles[id]?.name || ''}><${Avatar} p=${profiles[id]} /></span>`)}</span>`;
 }
 function Chip({ on, onClick, children, color, className }) {
   return html`<button type="button" className=${'chip ' + (className || '')} aria-pressed=${on ? 'true' : 'false'} onClick=${onClick} style=${color ? { '--chip': color } : null}>${children}</button>`;
@@ -245,11 +249,12 @@ function Today(ctx) {
   const upcoming = events.filter((e) => (e.end || e.start) >= startOfDay(now).getTime() && e.start < addDays(startOfDay(now), 7).getTime()).sort((a, b) => a.start - b.start);
   const todays = upcoming.filter((e) => eventDays(e).includes(tk));
   const later = upcoming.filter((e) => !eventDays(e).includes(tk));
-  const remindNow = upcoming.filter((e) => e.reminderMinutes != null && !e.allDay && e.start > now && e.start - e.reminderMinutes * 60000 <= now);
+  const remindNow = upcoming.filter((e) => e.reminderMinutes != null && !e.allDay && e.start > now && e.start - e.reminderMinutes * 60000 <= now && eventPeople(e, ctx.memberIds).includes(me.id));
   const meals = (data.menu || []).filter((m) => m.date === tk).sort((a, b) => MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal));
   const mine = (data.todos || []).filter((t) => !t.done && (t.assigneeId === me?.id || !t.assigneeId) && (!t.dueDate || t.dueDate <= tk))
     .sort((a, b) => (a.dueDate || '9').localeCompare(b.dueDate || '9'));
   const counts = CATS.map((c) => ({ ...c, n: (data.shopping || []).filter((s) => s.category === c.key && !s.checked).length }));
+  const pickups = (data.shopping || []).filter((s) => !s.checked && s.assigneeId === me.id).sort((a, b) => a.createdAt - b.createdAt);
   const greet = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const name = (profiles[me?.id]?.name || '').split(' ')[0];
 
@@ -266,6 +271,7 @@ function Today(ctx) {
         ${todays.length === 0 ? html`<span className="muted">Nothing on the calendar today.</span>` : todays.map((e) => html`
           <button key=${e.id} className="row" style=${{ border: 0, background: 'none', padding: 0, textAlign: 'left' }} onClick=${() => setSheet(html`<${EventSheet} ...${ctx} event=${e} />`)}>
             <span className="time">${e.allDay ? 'All day' : fmtTime(e.start)}</span><span className="grow">${e.title}</span>
+            <${People} ids=${eventPeople(e, ctx.memberIds)} profiles=${profiles} all=${eventPeople(e, ctx.memberIds).length === ctx.memberIds.length && ctx.memberIds.length > 1} />
           </button>`)}
         ${later.length > 0 && html`<span className="label" style=${{ marginTop: 6 }}>This week</span>
           ${later.slice(0, 4).map((e) => html`<div key=${e.id} className="row small"><span className="time">${new Date(e.start).toLocaleDateString([], { weekday: 'short' })}</span><span className="grow">${e.title}</span></div>`)}`}
@@ -280,6 +286,15 @@ function Today(ctx) {
       <div className="between"><span className="label">Your to-dos</span><a className="btn ghost sm" href="#todos">All to-dos</a></div>
       ${mine.length === 0 ? html`<span className="muted">You're all caught up.</span>` : mine.slice(0, 6).map((t) => html`<${TodoRow} key=${t.id} t=${t} ...${ctx} />`)}
     </section>
+    ${pickups.length > 0 && html`<section className="card">
+      <div className="between"><span className="label">Pick up for the house · <span className="num">${pickups.length}</span></span><a className="btn ghost sm" href="#lists">Lists</a></div>
+      ${pickups.map((i) => html`<div key=${i.id} className="row">
+        <input type="checkbox" className="check" style=${{ '--c': `var(--${i.category})` }} checked=${false} aria-label=${'Got ' + i.name}
+          onChange=${() => ctx.write((db) => db.doc(`shopping/${i.id}`).update({ checked: true }), `Got ${i.name}`)} />
+        <span className="grow">${i.name}${i.quantity && html` <span className="qty">· ${i.quantity}</span>`}</span>
+        ${i.assignedBy && i.assignedBy !== me.id && html`<span className="muted small">from ${firstName(i.assignedBy)}</span>`}
+      </div>`)}
+    </section>`}
     <a href="#lists" className="card" style=${{ textDecoration: 'none', color: 'inherit' }}>
       <span className="label">Shopping</span>
       <div className="chips">${counts.map((c) => html`<span key=${c.key} className="pill num">${c.label}: ${c.n}</span>`)}</div>
@@ -288,14 +303,16 @@ function Today(ctx) {
 
 // ---------- Calendar ----------
 function Calendar(ctx) {
-  const { data, person, setSheet } = ctx;
+  const { data, setSheet, memberIds, profiles, me, firstName } = ctx;
   const [sel, setSel] = useState(startOfDay(new Date()));
+  const [who, setWho] = useState('all');
+  const shows = (e) => who === 'all' || eventPeople(e, memberIds).includes(who);
   const [month, setMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const byDay = useMemo(() => {
     const m = new Map();
-    for (const e of data.events || []) for (const k of eventDays(e)) m.set(k, [...(m.get(k) || []), e]);
+    for (const e of (data.events || []).filter(shows)) for (const k of eventDays(e)) m.set(k, [...(m.get(k) || []), e]);
     return m;
-  }, [data.events]);
+  }, [data.events, who, memberIds.join(',')]);
   const gridStart = startOfWeek(month);
   const weeks = Math.ceil((new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() + month.getDay()) / 7);
   const tk = dayKey(new Date());
@@ -303,6 +320,10 @@ function Calendar(ctx) {
 
   return html`
     <div className="between"><h1>Calendar</h1><button className="btn" onClick=${() => setSheet(html`<${EventSheet} ...${ctx} date=${dayKey(sel)} />`)}>+ New event</button></div>
+    ${memberIds.length > 1 && html`<div className="chips" role="group" aria-label="Show events for">
+      <${Chip} on=${who === 'all'} onClick=${() => setWho('all')}>Everyone<//>
+      ${memberIds.map((id) => html`<${Chip} key=${id} on=${who === id} color=${profiles[id]?.color} onClick=${() => setWho(id)}>${id === me.id ? 'Mine' : firstName(id) + "'s"}<//>`)}
+    </div>`}
     <section className="card">
       <div className="between">
         <button className="iconbtn" aria-label="Previous month" onClick=${() => setMonth(addMonths(month, -1))}>‹</button>
@@ -323,27 +344,30 @@ function Calendar(ctx) {
     <span className="label">${fmtDay(sel)}</span>
     ${dayEvents.length === 0 ? html`<div className="list"><${Empty} title="Nothing planned">Add an event for this day with “New event”.<//></div>` : html`
       <div className="list">${dayEvents.map((e) => {
-        const p = person(e.createdBy);
+        const going = eventPeople(e, memberIds); const all = going.length === memberIds.length && memberIds.length > 1;
+        const stripe = going.length === 1 ? profiles[going[0]]?.color : 'var(--accent)';
         return html`<button key=${e.id} className="item row rowbtn" onClick=${() => setSheet(html`<${EventSheet} ...${ctx} event=${e} />`)}>
-          <span className="stripe" style=${{ background: p?.color || 'var(--accent)' }}></span>
+          <span className="stripe" style=${{ background: stripe || 'var(--accent)' }}></span>
           <span className="grow stack" style=${{ gap: 2 }}>
             <strong>${e.title}</strong>
             <span className="muted small">${e.allDay ? 'All day' : `${fmtTime(e.start)} – ${fmtTime(e.end)}`}${e.reminderMinutes != null ? ` · ${reminderLabel(e.reminderMinutes)}` : ''}</span>
           </span>
-          ${p && html`<${Avatar} p=${p} />`}
+          <${People} ids=${going} profiles=${profiles} all=${all} />
         </button>`;
       })}</div>`}`;
 }
 
 function EventSheet(ctx) {
-  const { event, date, write, setSheet, me, say } = ctx;
+  const { event, date, write, setSheet, me, say, memberIds, profiles, firstName } = ctx;
   const base = event ? new Date(event.start) : (() => { const d = parseKey(date || dayKey(new Date())); const n = new Date(); d.setHours(n.getHours() + 1, 0, 0, 0); return d; })();
   const baseEnd = event ? new Date(event.end) : new Date(base.getTime() + 3600000);
   const [f, setF] = useState({
     title: event?.title || '', allDay: !!event?.allDay, notes: event?.notes || '',
     day: dayKey(base), start: timeStr(base), endDay: dayKey(baseEnd), end: timeStr(baseEnd),
     reminder: event ? (event.reminderMinutes ?? null) : 30,
+    going: event ? eventPeople(event, memberIds) : [me.id],
   });
+  const toggleGoing = (id) => setF({ ...f, going: f.going.includes(id) ? f.going.filter((x) => x !== id) : [...f.going, id] });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const close = () => setSheet(null);
 
@@ -353,7 +377,8 @@ function EventSheet(ctx) {
     const start = f.allDay ? parseKey(f.day).getTime() : at(f.day, f.start);
     const end = f.allDay ? parseKey(f.endDay).getTime() + 86340000 : at(f.endDay, f.end);
     if (end < start) return say('The event ends before it starts.');
-    const body = { title: f.title.trim(), start, end, allDay: f.allDay, notes: f.notes.trim(), reminderMinutes: f.reminder === '' || f.reminder === null ? null : Number(f.reminder), createdBy: event?.createdBy || me?.id || null };
+    if (f.going.length === 0) return say('Pick who\u2019s going.');
+    const body = { title: f.title.trim(), start, end, allDay: f.allDay, notes: f.notes.trim(), reminderMinutes: f.reminder === '' || f.reminder === null ? null : Number(f.reminder), createdBy: event?.createdBy || me?.id || null, attendeeIds: f.going };
     body.remindAt = remindAtFor(body);
     body.reminderSent = body.remindAt === null || body.remindAt <= Date.now();
     body.tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -362,6 +387,13 @@ function EventSheet(ctx) {
 
   return html`<${Sheet} title=${event ? 'Edit event' : 'New event'} onClose=${close}>
     <${Field} label="Title"><input id="ev-title" type="text" value=${f.title} onChange=${set('title')} placeholder="Dinner with friends" autoFocus /><//>
+    ${memberIds.length > 1 && html`<div className="stack" style=${{ gap: 6 }}>
+      <span className="label">Who's going</span>
+      <div className="chips">
+        ${memberIds.map((id) => html`<${Chip} key=${id} on=${f.going.includes(id)} color=${profiles[id]?.color} onClick=${() => toggleGoing(id)}>${firstName(id)}${id === me.id ? ' (me)' : ''}<//>`)}
+        <${Chip} on=${f.going.length === memberIds.length} onClick=${() => setF({ ...f, going: f.going.length === memberIds.length ? [me.id] : [...memberIds] })}>Everyone<//>
+      </div>
+    </div>`}
     <label className="row"><input id="ev-allday" type="checkbox" checked=${f.allDay} onChange=${set('allDay')} /> All day</label>
     <div className="fields2">
       <${Field} label="Starts"><input id="ev-day" type="date" value=${f.day} onChange=${(e) => setF({ ...f, day: e.target.value, endDay: e.target.value > f.endDay ? e.target.value : f.endDay })} /><//>
@@ -375,32 +407,38 @@ function EventSheet(ctx) {
     <${Field} label="Notes"><textarea id="ev-notes" value=${f.notes} onChange=${set('notes')} placeholder="Address, what to bring…"></textarea><//>
     <button className="btn" onClick=${save}>${event ? 'Save changes' : 'Add event'}</button>
     ${event && html`
-      <div className="notice small">The reminder goes to every phone in your home with notifications turned on (Household → Notifications). You can also <a href=${googleCalLink(event)} target="_blank" rel="noopener">add it to Google Calendar</a>.</div>
+      <div className="notice small">The reminder goes to the phones of the people going, if they've turned on notifications (Household → Notifications). You can also <a href=${googleCalLink(event)} target="_blank" rel="noopener">add it to Google Calendar</a>.</div>
       <${ConfirmDelete} label="Delete event" onConfirm=${async () => { if (await write((db) => db.doc(`events/${event.id}`).delete(), 'Event deleted')) close(); }} />`}
   <//>`;
 }
 
 // ---------- Lists ----------
 function Lists(ctx) {
-  const { data, write, person, me } = ctx;
+  const { data, write, me, memberIds, profiles, firstName } = ctx;
+  const [forWho, setForWho] = useState(null);
   const [cat, setCat] = useState(() => { try { return localStorage.getItem('homeiq-cat') || 'groceries'; } catch { return 'groceries'; } });
   const [name, setName] = useState(''); const [qty, setQty] = useState('');
   const [openId, setOpenId] = useState(null);
   useEffect(() => { try { localStorage.setItem('homeiq-cat', cat); } catch {} }, [cat]);
-  const items = (data.shopping || []).filter((s) => s.category === cat).sort((a, b) => a.createdAt - b.createdAt);
+  // Things you've been asked to pick up come first.
+  const items = (data.shopping || []).filter((s) => s.category === cat)
+    .sort((a, b) => (b.assigneeId === me.id) - (a.assigneeId === me.id) || a.createdAt - b.createdAt);
   const open = items.filter((i) => !i.checked); const done = items.filter((i) => i.checked);
 
   const add = async (e) => {
     e.preventDefault(); if (!name.trim()) return;
-    const body = { name: name.trim(), quantity: qty.trim(), category: cat, checked: false, addedBy: me?.id || null, recipeName: null, createdAt: Date.now() };
+    const body = { name: name.trim(), quantity: qty.trim(), category: cat, checked: false, addedBy: me?.id || null, recipeName: null, createdAt: Date.now(),
+      assigneeId: forWho, assignedBy: forWho ? me.id : null };
     setName(''); setQty('');
     await write((db) => db.collection('shopping').add(body));
   };
   const toggle = (i) => write((db) => db.doc(`shopping/${i.id}`).update({ checked: !i.checked }));
   const clear = () => write(async (db) => { for (const i of done) await db.doc(`shopping/${i.id}`).delete(); }, `Cleared ${done.length} items`);
 
+  const assign = (i, id) => write((db) => db.doc(`shopping/${i.id}`).update({ assigneeId: id, assignedBy: me.id }),
+    id ? `${id === me.id ? 'You\u2019re' : firstName(id) + ' is'} picking up ${i.name}` : `Anyone can pick up ${i.name}`);
   const Item = ({ i }) => {
-    const p = person(i.addedBy);
+    const p = i.assigneeId ? profiles[i.assigneeId] : null;
     return html`<div className="item">
       <div className="row">
         <input type="checkbox" className="check" style=${{ '--c': `var(--${i.category})` }} checked=${!!i.checked} onChange=${() => toggle(i)} aria-label=${'Got ' + i.name} />
@@ -408,9 +446,12 @@ function Lists(ctx) {
           <span className=${i.checked ? 'done-text' : ''}>${i.name}</span>${i.quantity && html` <span className="qty">· ${i.quantity}</span>`}
           ${i.recipeName && !i.checked && html`<div className="muted small">for ${i.recipeName}</div>`}
         </button>
-        ${p && html`<${Avatar} p=${p} />`}
+        ${p && html`<span className="pickup" style=${{ '--c': p.color }}><${Avatar} p=${p} />${i.assigneeId === me.id ? 'You' : firstName(i.assigneeId)}</span>`}
       </div>
       ${openId === i.id && html`<div className="tray">
+        ${memberIds.length > 1 && html`<div className="chips" style=${{ width: '100%' }}><span className="muted small" style=${{ alignSelf: 'center' }}>Who's picking it up?</span>
+          <${Chip} on=${!i.assigneeId} onClick=${() => assign(i, null)}>Anyone<//>
+          ${memberIds.map((id) => html`<${Chip} key=${id} on=${i.assigneeId === id} color=${profiles[id]?.color} onClick=${() => assign(i, id)}>${id === me.id ? 'Me' : firstName(id)}<//>`)}</div>`}
         ${CATS.filter((c) => c.key !== i.category).map((c) => html`<button key=${c.key} className="btn sm secondary" onClick=${() => write((db) => db.doc(`shopping/${i.id}`).update({ category: c.key }), `Moved to ${c.label}`)}>Move to ${c.label}</button>`)}
         <button className="btn sm danger" onClick=${() => write((db) => db.doc(`shopping/${i.id}`).delete())}>Remove</button>
       </div>`}
@@ -428,6 +469,11 @@ function Lists(ctx) {
       <input id="list-qty" type="text" value=${qty} onChange=${(e) => setQty(e.target.value)} placeholder="Qty" aria-label="Quantity" />
       <button className="btn" type="submit">Add</button>
     </form>
+    ${memberIds.length > 1 && html`<div className="chips" role="group" aria-label="Who picks up new items">
+      <span className="muted small" style=${{ alignSelf: 'center' }}>Picking up:</span>
+      <${Chip} on=${!forWho} onClick=${() => setForWho(null)}>Anyone<//>
+      ${memberIds.map((id) => html`<${Chip} key=${id} on=${forWho === id} color=${profiles[id]?.color} onClick=${() => setForWho(id)}>${id === me.id ? 'Me' : firstName(id)}<//>`)}
+    </div>`}
     ${items.length === 0 ? html`<div className="list"><${Empty} title="This list is empty">${cat === 'groceries' ? 'Add items above, or put a recipe on the menu to fill it automatically.' : 'Add the first item above.'}<//></div>` : html`
       ${open.length > 0 && html`<div className="list">${open.map((i) => html`<${Item} key=${i.id} i=${i} />`)}</div>`}
       ${done.length > 0 && html`
@@ -476,7 +522,10 @@ function Menu(ctx) {
         const list = entries.filter((m) => m.date === k).sort((a, b) => MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal));
         return html`<section key=${k} className=${'card day' + (k === tk ? ' today' : '')}>
           <div className="between"><strong>${d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</strong>
-            <button className="btn ghost sm" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} date=${k} />`)}>+ Add</button></div>
+            <span className="row" style=${{ gap: 0 }}>
+              <button className="btn ghost sm" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} date=${k} mode="leftovers" />`)}>Leftovers</button>
+              <button className="btn ghost sm" onClick=${() => setSheet(html`<${MenuAddSheet} ...${ctx} date=${k} />`)}>+ Add</button>
+            </span></div>
           ${list.length === 0 ? html`<span className="muted small">Nothing planned</span>` : list.map((m) => html`
             <div key=${m.id} className="row">
               <span className="meal">${m.meal}</span>
@@ -496,29 +545,47 @@ function Menu(ctx) {
 }
 
 function MenuAddSheet(ctx) {
-  const { data, write, setSheet, say, me, date, recipeId } = ctx;
+  const { data, write, setSheet, say, me, date, recipeId, mode: startMode } = ctx;
   const recipes = (data.recipes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const [f, setF] = useState({ date: date || dayKey(new Date()), meal: 'dinner', recipeId: recipeId || null, title: '', groceries: true });
-  const recipe = recipes.find((r) => r.id === f.recipeId);
+  const [mode, setMode] = useState(startMode || (recipeId ? 'recipe' : recipes.length ? 'recipe' : 'quick'));
+  const [f, setF] = useState({ date: date || dayKey(new Date()), meal: startMode === 'leftovers' ? 'lunch' : 'dinner', recipeId: recipeId || null, title: '', groceries: true, leftover: null });
+  const recipe = mode === 'recipe' ? recipes.find((r) => r.id === f.recipeId) : null;
+  const leftovers = leftoverOptions(data.menu, f.date, f.meal);
+  const pick = leftovers.find((o) => o.title === f.leftover);
   const close = () => setSheet(null);
   const save = async () => {
-    if (!recipe && !f.title.trim()) return say('Pick a recipe or type what you’re having.');
+    let entry;
+    if (mode === 'recipe') { if (!recipe) return say('Pick a recipe.'); entry = { title: recipe.name, recipeId: recipe.id }; }
+    else if (mode === 'leftovers') { if (!pick) return say('Pick which leftovers.'); entry = { title: `Leftovers: ${pick.title}`, recipeId: null, leftoverOf: pick.recipeId }; }
+    else { if (!f.title.trim()) return say('Type what you\u2019re having.'); entry = { title: f.title.trim(), recipeId: null }; }
     const ok = await write(async (db) => {
-      await db.collection('menu').add({ date: f.date, meal: f.meal, title: recipe ? recipe.name : f.title.trim(), recipeId: recipe?.id || null });
+      await db.collection('menu').add({ date: f.date, meal: f.meal, ...entry });
       if (recipe && f.groceries) { const n = await addToGroceries(db, recipe, data.shopping, me?.id); say(`Added to menu, and ${n} ingredients to Groceries`); }
       else say('Added to menu');
     });
     if (ok) close();
   };
+  const dayName = (k) => { const diff = Math.round((parseKey(f.date) - parseKey(k)) / 86400000); return diff === 0 ? 'Earlier today' : diff === 1 ? 'Yesterday' : parseKey(k).toLocaleDateString([], { weekday: 'long' }); };
   return html`<${Sheet} title="Add to menu" onClose=${close}>
-    <${Field} label="Day"><input id="ma-date" type="date" value=${f.date} onChange=${(e) => setF({ ...f, date: e.target.value })} /><//>
-    <div className="chips">${MEALS.map((m) => html`<${Chip} key=${m} on=${f.meal === m} onClick=${() => setF({ ...f, meal: m })}>${m[0].toUpperCase() + m.slice(1)}<//>`)}</div>
-    <span className="label">From your recipes</span>
-    ${recipes.length === 0 ? html`<span className="muted small">No saved recipes yet. Type a meal below, or save recipes under Menu → Recipes.</span>`
-      : html`<div className="chips">${recipes.map((r) => html`<${Chip} key=${r.id} on=${f.recipeId === r.id} onClick=${() => setF({ ...f, recipeId: f.recipeId === r.id ? null : r.id })}>${r.name}<//>`)}</div>`}
-    ${!recipe && html`<${Field} label="Or something quick"><input id="ma-title" type="text" value=${f.title} onChange=${(e) => setF({ ...f, title: e.target.value })} placeholder="Leftovers, takeout, tacos…" /><//>`}
-    ${recipe && html`<label className="row card"><input id="ma-groc" type="checkbox" checked=${f.groceries} onChange=${(e) => setF({ ...f, groceries: e.target.checked })} />
+    <${Field} label="Day"><input id="ma-date" type="date" value=${f.date} onChange=${(e) => setF({ ...f, date: e.target.value, leftover: null })} /><//>
+    <div className="chips">${MEALS.map((m) => html`<${Chip} key=${m} on=${f.meal === m} onClick=${() => setF({ ...f, meal: m, leftover: null })}>${m[0].toUpperCase() + m.slice(1)}<//>`)}</div>
+    <div className="seg" role="tablist" aria-label="What kind of meal">
+      ${[['recipe', 'A recipe'], ['leftovers', 'Leftovers'], ['quick', 'Something else']].map(([k, label]) => html`
+        <button key=${k} role="tab" aria-selected=${mode === k ? 'true' : 'false'} onClick=${() => setMode(k)}>${label}</button>`)}
+    </div>
+    ${mode === 'recipe' && (recipes.length === 0
+      ? html`<span className="muted small">No saved recipes yet. Save them under Menu → Recipes, or choose Something else.</span>`
+      : html`<div className="chips">${recipes.map((r) => html`<${Chip} key=${r.id} on=${f.recipeId === r.id} onClick=${() => setF({ ...f, recipeId: f.recipeId === r.id ? null : r.id })}>${r.name}<//>`)}</div>`)}
+    ${mode === 'recipe' && recipe && html`<label className="row card"><input id="ma-groc" type="checkbox" checked=${f.groceries} onChange=${(e) => setF({ ...f, groceries: e.target.checked })} />
       <span className="grow">Add its ${(recipe.ingredients || []).length} ingredients to Groceries</span></label>`}
+    ${mode === 'leftovers' && (leftovers.length === 0
+      ? html`<span className="muted small">Nothing on the menu in the 4 days before this meal. Choose Something else to type it in.</span>`
+      : html`<div className="list">${leftovers.map((o) => html`
+          <button key=${o.title} className="item row rowbtn" aria-pressed=${f.leftover === o.title ? 'true' : 'false'} onClick=${() => setF({ ...f, leftover: o.title })}>
+            <span className=${'radio' + (f.leftover === o.title ? ' on' : '')}></span>
+            <span className="grow"><strong>${o.title}</strong><div className="muted small">${dayName(o.date)} · ${o.meal}</div></span>
+          </button>`)}</div>`)}
+    ${mode === 'quick' && html`<${Field} label="What are you having?"><input id="ma-title" type="text" value=${f.title} onChange=${(e) => setF({ ...f, title: e.target.value })} placeholder="Takeout, tacos, eating out…" /><//>`}
     <button className="btn" onClick=${save}>Add to menu</button>
   <//>`;
 }

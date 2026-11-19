@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, remindAtFor } from '../src/logic.js';
+import { googleCalLink, nextDue, parseIngredients, parseKey, planGroceries, remindAtFor, leftoverOptions, eventPeople } from '../src/logic.js';
 
 test('repeating to-dos roll forward past today', () => {
   assert.equal(nextDue('2026-11-10', 'none', parseKey('2026-11-15')), '2026-11-10');
@@ -46,4 +46,24 @@ test('reminder times', () => {
   assert.equal(remindAtFor({ start, allDay: false, reminderMinutes: null }), null);
   const dayStart = new Date(2026, 10, 20).getTime();
   assert.equal(remindAtFor({ start: dayStart, allDay: true, reminderMinutes: 1440 }), new Date(2026, 10, 19, 9, 0).getTime());
+});
+
+test('leftover choices from the last few days', () => {
+  const menu = [
+    { date: '2026-11-19', meal: 'dinner', title: 'Tacos' },          // later the same day: not yet eaten
+    { date: '2026-11-19', meal: 'breakfast', title: 'Pancakes' },
+    { date: '2026-11-18', meal: 'dinner', title: 'Chili', recipeId: 'r1' },
+    { date: '2026-11-17', meal: 'lunch', title: 'Leftovers: Chili' }, // duplicate of Chili
+    { date: '2026-11-16', meal: 'dinner', title: 'Lasagna' },
+    { date: '2026-11-10', meal: 'dinner', title: 'Too old' },
+  ];
+  const opts = leftoverOptions(menu, '2026-11-19', 'lunch');
+  assert.deepEqual(opts.map((o) => o.title), ['Pancakes', 'Chili', 'Lasagna']);
+  assert.equal(opts[1].recipeId, 'r1');
+});
+
+test('event people default to everyone', () => {
+  assert.deepEqual(eventPeople({}, ['a', 'b']), ['a', 'b']);
+  assert.deepEqual(eventPeople({ attendeeIds: ['b'] }, ['a', 'b']), ['b']);
+  assert.deepEqual(eventPeople({ attendeeIds: ['gone'] }, ['a', 'b']), ['a', 'b']);
 });

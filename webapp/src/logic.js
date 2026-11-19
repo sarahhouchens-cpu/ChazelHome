@@ -116,3 +116,31 @@ export function remindAtFor(e) {
   const base = e.allDay ? new Date(e.start).setHours(9, 0, 0, 0) : e.start;
   return base - e.reminderMinutes * 60000;
 }
+
+const LEFTOVER_PREFIX = /^leftovers:\s*/i;
+
+/**
+ * Meals eaten in the few days before `date`/`meal` that could be leftovers, newest first.
+ * Leftovers of leftovers count as the original dish, and each dish appears once.
+ */
+export function leftoverOptions(menu, date, meal, days = 4) {
+  const from = dayKey(addDays(parseKey(date), -days));
+  const before = (m) => m.date < date || (m.date === date && MEALS.indexOf(m.meal) < MEALS.indexOf(meal));
+  const seen = new Set(); const out = [];
+  const sorted = (menu || []).filter((m) => m.date >= from && before(m))
+    .sort((a, b) => b.date.localeCompare(a.date) || MEALS.indexOf(b.meal) - MEALS.indexOf(a.meal));
+  for (const m of sorted) {
+    const title = (m.title || '').replace(LEFTOVER_PREFIX, '').trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, date: m.date, meal: m.meal, recipeId: m.recipeId || null });
+  }
+  return out;
+}
+
+/** Who an event is for: its attendees, or everyone in the home when none are set. */
+export function eventPeople(e, memberIds) {
+  const set = (e.attendeeIds || []).filter((id) => memberIds.includes(id));
+  return set.length ? set : memberIds;
+}

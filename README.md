@@ -31,7 +31,7 @@ Paste that `firebaseConfig` into [`docs/config.js`](docs/config.js) (on GitHub: 
 4. On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app icon.
 
 ## Notifications
-Phones get a notification for event reminders, when someone else adds an event, and when someone assigns you a to-do. Setup, once:
+Phones get a notification for reminders of events you are going to, when someone else adds an event, when someone assigns you a to-do, and when someone asks you to pick something up. Setup, once:
 1. **Firebase billing:** Firebase console → upgrade to the **Blaze (pay as you go)** plan and set a budget alert (e.g. $1). A household's usage stays in the free allowance.
 2. **Web push key:** Project settings → **Cloud Messaging** → **Web Push certificates** → **Generate key pair**. Put the key in `vapidKey` in `docs/config.js` and `webapp/public/config.js` (or send it to Claude).
 3. **Background jobs:** open <https://console.cloud.google.com>, click the **Activate Cloud Shell** button (`>_`, top right), and paste:

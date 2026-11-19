@@ -177,6 +177,14 @@ textarea { min-height: 90px; resize: vertical; }
 .swatch[aria-pressed="true"] { border-color: var(--ink); }
 input[type=email], input[type=password] { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
 code { font-size: 13px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--sunk); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 8px; padding: 8px 6px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.seg button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+.radio.on { border: 6px solid var(--accent); }
+.people { display: inline-flex; padding-left: 6px; flex: none; }
+.pickup { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--c, var(--muted)); background: var(--sunk); border-radius: 999px; padding: 2px 8px 2px 2px; flex: none; }
+.pickup .avatar, .pickup .initials { width: 20px; height: 20px; font-size: 9px; }
 </style>
 <script src="./config.js"></script>
 </head>
