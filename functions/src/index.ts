@@ -18,7 +18,7 @@ import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/fire
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 // Set by deploy-notifications.sh to match the database location.
-setGlobalOptions({ region: process.env.FUNCTION_REGION || 'us-central1', maxInstances: 5 });
+setGlobalOptions({ region: process.env.HOMEIQ_REGION || 'us-central1', maxInstances: 5 });
 
 initializeApp();
 const db = getFirestore();
